@@ -709,6 +709,99 @@ func TestAddConfigurableProduct(t *testing.T) {
 	}
 }
 
+func TestAddBundleProduct(t *testing.T) {
+	cartID := createTestCart(t)
+
+	// 24-WG080 = Sprite Yoga Companion Kit (bundle)
+	// Options: Stasis Ball(1/1), Foam Brick(2/4), Yoga Strap(3/5), Foam Roller(4/8)
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		addProductsToCart(cartId: "%s", cartItems: [{
+			sku: "24-WG080",
+			quantity: 1,
+			selected_options: [
+				"YnVuZGxlLzEvMS8x",
+				"YnVuZGxlLzIvNC8x",
+				"YnVuZGxlLzMvNS8x",
+				"YnVuZGxlLzQvOC8x"
+			]
+		}]) {
+			cart {
+				total_quantity
+				items {
+					uid
+					quantity
+					product { sku name }
+					prices { price { value } row_total { value } }
+					... on BundleCartItem {
+						bundle_options {
+							uid label type
+							values { id label quantity price }
+						}
+					}
+				}
+			}
+			user_errors { code message }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("add bundle: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		AddProductsToCart struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					Quantity float64 `json:"quantity"`
+					Product  struct {
+						SKU  string `json:"sku"`
+						Name string `json:"name"`
+					} `json:"product"`
+					Prices struct {
+						Price    struct{ Value float64 } `json:"price"`
+						RowTotal struct{ Value float64 } `json:"row_total"`
+					} `json:"prices"`
+					BundleOptions []struct {
+						UID    string `json:"uid"`
+						Label  string `json:"label"`
+						Type   string `json:"type"`
+						Values []struct {
+							ID       int     `json:"id"`
+							Label    string  `json:"label"`
+							Quantity float64 `json:"quantity"`
+							Price    float64 `json:"price"`
+						} `json:"values"`
+					} `json:"bundle_options"`
+				} `json:"items"`
+			} `json:"cart"`
+			UserErrors []struct{ Code, Message string } `json:"user_errors"`
+		} `json:"addProductsToCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.AddProductsToCart.UserErrors) > 0 {
+		t.Fatalf("user errors: %v", data.AddProductsToCart.UserErrors)
+	}
+	if data.AddProductsToCart.Cart.TotalQuantity != 1 {
+		t.Errorf("expected total_quantity 1, got %v", data.AddProductsToCart.Cart.TotalQuantity)
+	}
+	if len(data.AddProductsToCart.Cart.Items) != 1 {
+		t.Fatalf("expected 1 item (parent only), got %d", len(data.AddProductsToCart.Cart.Items))
+	}
+
+	item := data.AddProductsToCart.Cart.Items[0]
+	if item.Product.SKU != "24-WG080" {
+		t.Errorf("expected parent SKU 24-WG080, got %s", item.Product.SKU)
+	}
+	// Price should be sum of children: 23 + 5 + 14 + 19 = 61
+	if item.Prices.Price.Value != 61 {
+		t.Errorf("expected price 61 (sum of children), got %v", item.Prices.Price.Value)
+	}
+	if len(item.BundleOptions) != 4 {
+		t.Errorf("expected 4 bundle options, got %d", len(item.BundleOptions))
+	}
+}
+
 func TestDuplicateSkuMerge(t *testing.T) {
 	cartID := createTestCart(t)
 	addTestProduct(t, cartID, "24-MB01", 1)

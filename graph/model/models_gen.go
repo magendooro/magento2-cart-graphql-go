@@ -68,6 +68,31 @@ type BillingCartAddress struct {
 	Company   *string             `json:"company,omitempty"`
 }
 
+type BundleCartItem struct {
+	UID           string                  `json:"uid"`
+	Quantity      float64                 `json:"quantity"`
+	Prices        *CartItemPrices         `json:"prices,omitempty"`
+	Product       *CartItemProduct        `json:"product"`
+	Errors        []*CartItemError        `json:"errors,omitempty"`
+	BundleOptions []*SelectedBundleOption `json:"bundle_options"`
+}
+
+func (BundleCartItem) IsCartItemInterface()              {}
+func (this BundleCartItem) GetUID() string               { return this.UID }
+func (this BundleCartItem) GetQuantity() float64         { return this.Quantity }
+func (this BundleCartItem) GetPrices() *CartItemPrices   { return this.Prices }
+func (this BundleCartItem) GetProduct() *CartItemProduct { return this.Product }
+func (this BundleCartItem) GetErrors() []*CartItemError {
+	if this.Errors == nil {
+		return nil
+	}
+	interfaceSlice := make([]*CartItemError, 0, len(this.Errors))
+	for _, concrete := range this.Errors {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
 type Cart struct {
 	ID                      string                    `json:"id"`
 	Items                   []CartItemInterface       `json:"items,omitempty"`
@@ -275,6 +300,20 @@ type RemoveItemFromCartInput struct {
 
 type RemoveItemFromCartOutput struct {
 	Cart *Cart `json:"cart"`
+}
+
+type SelectedBundleOption struct {
+	UID    string                       `json:"uid"`
+	Label  string                       `json:"label"`
+	Type   string                       `json:"type"`
+	Values []*SelectedBundleOptionValue `json:"values"`
+}
+
+type SelectedBundleOptionValue struct {
+	ID       int     `json:"id"`
+	Label    string  `json:"label"`
+	Quantity float64 `json:"quantity"`
+	Price    float64 `json:"price"`
 }
 
 type SelectedConfigurableOption struct {

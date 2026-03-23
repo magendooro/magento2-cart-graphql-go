@@ -723,6 +723,87 @@ func TestCompare_ConfigurableProduct(t *testing.T) {
 		goCart.Items[0].Prices.Price.Value)
 }
 
+func TestCompare_BundleProduct(t *testing.T) {
+	addQ := func(cartID string) string {
+		return fmt.Sprintf(`mutation {
+			addProductsToCart(cartId: "%s", cartItems: [{
+				sku: "24-WG080", quantity: 1,
+				selected_options: ["YnVuZGxlLzEvMS8x","YnVuZGxlLzIvNC8x","YnVuZGxlLzMvNS8x","YnVuZGxlLzQvOC8x"]
+			}]) {
+				cart {
+					total_quantity
+					items {
+						product { sku name }
+						prices { price { value } row_total { value } }
+						... on BundleCartItem {
+							bundle_options { label values { id label price } }
+						}
+					}
+				}
+				user_errors { code message }
+			}
+		}`, cartID)
+	}
+
+	goResp := doQuery(t, `mutation { createEmptyCart }`, "")
+	mResp := doMagentoQuery(t, `mutation { createEmptyCart }`, "")
+	var goCreate, mCreate struct{ CreateEmptyCart string `json:"createEmptyCart"` }
+	json.Unmarshal(goResp.Data, &goCreate)
+	json.Unmarshal(mResp.Data, &mCreate)
+
+	goResp = doQuery(t, addQ(goCreate.CreateEmptyCart), "")
+	mResp = doMagentoQuery(t, addQ(mCreate.CreateEmptyCart), "")
+
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento error: %s", mResp.Errors[0].Message)
+	}
+
+	type bundleResp struct {
+		AddProductsToCart struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					Product struct{ SKU string `json:"sku"` } `json:"product"`
+					Prices  struct {
+						Price    struct{ Value float64 } `json:"price"`
+						RowTotal struct{ Value float64 } `json:"row_total"`
+					} `json:"prices"`
+					BundleOptions []struct {
+						Label  string `json:"label"`
+						Values []struct {
+							ID    int     `json:"id"`
+							Price float64 `json:"price"`
+						} `json:"values"`
+					} `json:"bundle_options"`
+				} `json:"items"`
+			} `json:"cart"`
+		} `json:"addProductsToCart"`
+	}
+
+	var goData, mData bundleResp
+	json.Unmarshal(goResp.Data, &goData)
+	json.Unmarshal(mResp.Data, &mData)
+
+	goCart := goData.AddProductsToCart.Cart
+	mCart := mData.AddProductsToCart.Cart
+
+	assertEq(t, "bundle.total_quantity", goCart.TotalQuantity, mCart.TotalQuantity)
+	if len(goCart.Items) > 0 && len(mCart.Items) > 0 {
+		assertEq(t, "bundle.product.sku", goCart.Items[0].Product.SKU, mCart.Items[0].Product.SKU)
+		assertEq(t, "bundle.price", goCart.Items[0].Prices.Price.Value, mCart.Items[0].Prices.Price.Value)
+		assertEq(t, "bundle.row_total", goCart.Items[0].Prices.RowTotal.Value, mCart.Items[0].Prices.RowTotal.Value)
+		assertEq(t, "bundle.options_count", len(goCart.Items[0].BundleOptions), len(mCart.Items[0].BundleOptions))
+	}
+
+	t.Logf("PASS: bundle product matches Magento (SKU=%s, price=%.2f, options=%d)",
+		goCart.Items[0].Product.SKU,
+		goCart.Items[0].Prices.Price.Value,
+		len(goCart.Items[0].BundleOptions))
+}
+
 // ─── Coupon Comparison ──────────────────────────────────────────────────────
 
 func TestCompare_CouponApplyRemove(t *testing.T) {

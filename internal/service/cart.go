@@ -186,15 +186,20 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		}
 
 		if product.ProductType == "configurable" && len(input.SelectedOptions) > 0 {
-			// Configurable product: decode options, find child, insert parent+child
 			if err := s.addConfigurableProduct(ctx, quoteID, storeID, product, input); err != nil {
 				userErrors = append(userErrors, &model.CartUserInputError{
 					Code:    model.CartUserInputErrorTypeUndefined,
 					Message: err.Error(),
 				})
 			}
+		} else if product.ProductType == "bundle" && len(input.SelectedOptions) > 0 {
+			if err := s.addBundleProduct(ctx, quoteID, storeID, product, input); err != nil {
+				userErrors = append(userErrors, &model.CartUserInputError{
+					Code:    model.CartUserInputErrorTypeUndefined,
+					Message: err.Error(),
+				})
+			}
 		} else {
-			// Simple product
 			_, err = s.itemRepo.Add(ctx, quoteID, product.ProductID, input.Sku, product.Name, product.ProductType, input.Quantity, product.Price)
 			if err != nil {
 				userErrors = append(userErrors, &model.CartUserInputError{
@@ -318,16 +323,13 @@ func (s *CartService) MergeCarts(ctx context.Context, sourceCartID string, desti
 	sourceItems, _ := s.itemRepo.GetByQuoteID(ctx, sourceQuoteID)
 	for _, item := range sourceItems {
 		if item.ParentItemID != nil {
-			continue // skip child items, they follow their parent
+			continue
 		}
-		if item.ProductType == "configurable" {
-			// For configurable items, insert parent+child in destination
-			parentID, _ := s.itemRepo.AddConfigurable(ctx, destQuoteID, item.ProductID, item.SKU, item.Name, "configurable", item.Qty, item.Price)
-			// Find child item
+		if item.ProductType == "configurable" || item.ProductType == "bundle" {
+			parentID, _ := s.itemRepo.AddConfigurable(ctx, destQuoteID, item.ProductID, item.SKU, item.Name, item.ProductType, item.Qty, item.Price)
 			for _, child := range sourceItems {
 				if child.ParentItemID != nil && *child.ParentItemID == item.ItemID {
 					s.itemRepo.AddChild(ctx, destQuoteID, child.ProductID, child.SKU, child.Name, "simple", child.Qty, parentID)
-					break
 				}
 			}
 		} else {
@@ -377,12 +379,11 @@ func (s *CartService) AssignCustomerToGuestCart(ctx context.Context, guestCartID
 			if item.ParentItemID != nil {
 				continue
 			}
-			if item.ProductType == "configurable" {
-				parentID, _ := s.itemRepo.AddConfigurable(ctx, guestQuoteID, item.ProductID, item.SKU, item.Name, "configurable", item.Qty, item.Price)
+			if item.ProductType == "configurable" || item.ProductType == "bundle" {
+				parentID, _ := s.itemRepo.AddConfigurable(ctx, guestQuoteID, item.ProductID, item.SKU, item.Name, item.ProductType, item.Qty, item.Price)
 				for _, child := range oldItems {
 					if child.ParentItemID != nil && *child.ParentItemID == item.ItemID {
 						s.itemRepo.AddChild(ctx, guestQuoteID, child.ProductID, child.SKU, child.Name, "simple", child.Qty, parentID)
-						break
 					}
 				}
 			} else {
@@ -1082,6 +1083,10 @@ func (s *CartService) mapCartItem(ctx context.Context, item *repository.CartItem
 		return s.mapConfigurableCartItem(ctx, item, allItems, uid, prices, currency)
 	}
 
+	if item.ProductType == "bundle" {
+		return s.mapBundleCartItem(ctx, item, allItems, uid, prices, currency)
+	}
+
 	return &model.SimpleCartItem{
 		UID:      uid,
 		Quantity: item.Qty,
@@ -1179,6 +1184,95 @@ func (s *CartService) mapConfigurableCartItem(ctx context.Context, item *reposit
 	}
 
 	return result
+}
+
+func (s *CartService) mapBundleCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum) *model.BundleCartItem {
+	db := s.cartRepo.DB()
+
+	// Find child items
+	var childItems []*repository.CartItemData
+	for _, ci := range allItems {
+		if ci.ParentItemID != nil && *ci.ParentItemID == item.ItemID {
+			childItems = append(childItems, ci)
+		}
+	}
+
+	// Look up bundle options to build bundle_options response
+	var bundleOptions []*model.SelectedBundleOption
+	rows, err := db.QueryContext(ctx, `
+		SELECT bo.option_id, COALESCE(bov.title, ''), bo.type
+		FROM catalog_product_bundle_option bo
+		LEFT JOIN catalog_product_bundle_option_value bov ON bo.option_id = bov.option_id AND bov.store_id = 0
+		WHERE bo.parent_id = ?
+		ORDER BY bo.position`, item.ProductID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var optionID int
+			var title, optType string
+			rows.Scan(&optionID, &title, &optType)
+
+			// Find which child maps to this option
+			var values []*model.SelectedBundleOptionValue
+			for _, child := range childItems {
+				// Look up which selection this child product corresponds to
+				var selectionID int
+				var selQty float64
+				err := db.QueryRowContext(ctx,
+					"SELECT selection_id, selection_qty FROM catalog_product_bundle_selection WHERE parent_product_id = ? AND option_id = ? AND product_id = ?",
+					item.ProductID, optionID, child.ProductID,
+				).Scan(&selectionID, &selQty)
+				if err != nil {
+					continue
+				}
+
+				// Get child product name
+				childPrice := child.Price
+				if childPrice == 0 {
+					// For child items with price=0, look up from catalog
+					cp, _ := s.lookupProduct(ctx, child.SKU, 0)
+					if cp != nil {
+						childPrice = cp.Price
+					}
+				}
+
+				values = append(values, &model.SelectedBundleOptionValue{
+					ID:       selectionID,
+					Label:    child.Name,
+					Quantity: child.Qty / item.Qty, // per-bundle qty
+					Price:    childPrice,
+				})
+			}
+
+			if len(values) > 0 {
+				optionUID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("bundle/%d", optionID)))
+				bundleOptions = append(bundleOptions, &model.SelectedBundleOption{
+					UID:    optionUID,
+					Label:  title,
+					Type:   optType,
+					Values: values,
+				})
+			}
+		}
+	}
+
+	// Get parent product's original SKU
+	var parentSKU string
+	db.QueryRowContext(ctx,
+		"SELECT sku FROM catalog_product_entity WHERE entity_id = ?",
+		item.ProductID,
+	).Scan(&parentSKU)
+
+	return &model.BundleCartItem{
+		UID:      uid,
+		Quantity: item.Qty,
+		Product: &model.CartItemProduct{
+			Sku:  parentSKU,
+			Name: &item.Name,
+		},
+		Prices:        prices,
+		BundleOptions: bundleOptions,
+	}
 }
 
 func encodeUID(id int) string {
@@ -1352,6 +1446,113 @@ func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, store
 	_, err = s.itemRepo.AddChild(ctx, quoteID, child.ProductID, matchedChild.sku, child.Name, "simple", input.Quantity, parentItemID)
 	if err != nil {
 		return fmt.Errorf("Could not add \"%s\" to cart: %v", input.Sku, err)
+	}
+
+	return nil
+}
+
+// addBundleProduct handles adding a bundle product to the cart.
+// Decodes selected_options (bundle/<option_id>/<selection_id>/<qty>),
+// looks up each selection's child product, inserts parent (bundle, total price)
+// + children (simple, individual prices).
+func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID int, parent *productInfo, input *model.CartItemInput) error {
+	db := s.cartRepo.DB()
+
+	// Decode selected_options: base64("bundle/<option_id>/<selection_id>/<qty>")
+	type bundleSelection struct {
+		optionID    int
+		selectionID int
+		qty         float64
+	}
+	var selections []bundleSelection
+	for _, opt := range input.SelectedOptions {
+		decoded, err := base64.StdEncoding.DecodeString(opt)
+		if err != nil {
+			return fmt.Errorf("You need to choose options for your item.")
+		}
+		parts := strings.Split(string(decoded), "/")
+		if len(parts) < 3 || parts[0] != "bundle" {
+			continue // skip non-bundle options
+		}
+		optID, _ := strconv.Atoi(parts[1])
+		selID, _ := strconv.Atoi(parts[2])
+		qty := 1.0
+		if len(parts) >= 4 {
+			if q, err := strconv.ParseFloat(parts[3], 64); err == nil {
+				qty = q
+			}
+		}
+		if optID == 0 || selID == 0 {
+			return fmt.Errorf("You need to choose options for your item.")
+		}
+		selections = append(selections, bundleSelection{optionID: optID, selectionID: selID, qty: qty})
+	}
+
+	if len(selections) == 0 {
+		return fmt.Errorf("You need to choose options for your item.")
+	}
+
+	// Look up each selection's child product and compute total price
+	type childInfo struct {
+		selectionID int
+		optionID    int
+		productID   int
+		sku         string
+		name        string
+		price       float64
+		qty         float64
+	}
+	var children []childInfo
+	var totalPrice float64
+	var childSkus []string
+
+	for _, sel := range selections {
+		var productID int
+		var sku string
+		err := db.QueryRowContext(ctx,
+			"SELECT product_id, (SELECT sku FROM catalog_product_entity WHERE entity_id = bs.product_id) FROM catalog_product_bundle_selection bs WHERE bs.selection_id = ? AND bs.parent_product_id = ?",
+			sel.selectionID, parent.ProductID,
+		).Scan(&productID, &sku)
+		if err != nil {
+			return fmt.Errorf("Invalid bundle selection %d", sel.selectionID)
+		}
+
+		childProduct, err := s.lookupProduct(ctx, sku, storeID)
+		if err != nil {
+			return fmt.Errorf("Could not find product \"%s\"", sku)
+		}
+
+		childPrice := childProduct.Price * sel.qty
+		totalPrice += childPrice
+		childSkus = append(childSkus, sku)
+
+		children = append(children, childInfo{
+			selectionID: sel.selectionID,
+			optionID:    sel.optionID,
+			productID:   productID,
+			sku:         sku,
+			name:        childProduct.Name,
+			price:       childProduct.Price,
+			qty:         sel.qty,
+		})
+	}
+
+	// Build composite SKU: parent-child1-child2-...
+	compositeSKU := parent.Name // Magento uses parent SKU + child SKUs joined by -
+	compositeSKU = input.Sku
+	for _, sku := range childSkus {
+		compositeSKU += "-" + sku
+	}
+
+	// Insert parent row (bundle type, total price)
+	parentItemID, err := s.itemRepo.AddConfigurable(ctx, quoteID, parent.ProductID, compositeSKU, parent.Name, "bundle", input.Quantity, totalPrice)
+	if err != nil {
+		return fmt.Errorf("Could not add \"%s\" to cart: %v", input.Sku, err)
+	}
+
+	// Insert child rows (simple type, individual prices, parent_item_id)
+	for _, child := range children {
+		s.itemRepo.AddChild(ctx, quoteID, child.productID, child.sku, child.name, "simple", child.qty*input.Quantity, parentItemID)
 	}
 
 	return nil

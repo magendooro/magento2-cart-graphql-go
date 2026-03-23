@@ -111,6 +111,29 @@ type SelectedConfigurableOption {
     value_label: String!
 }
 
+type BundleCartItem implements CartItemInterface {
+    uid: ID!
+    quantity: Float!
+    prices: CartItemPrices
+    product: CartItemProduct!
+    errors: [CartItemError]
+    bundle_options: [SelectedBundleOption!]!
+}
+
+type SelectedBundleOption {
+    uid: ID!
+    label: String!
+    type: String!
+    values: [SelectedBundleOptionValue!]!
+}
+
+type SelectedBundleOptionValue {
+    id: Int!
+    label: String!
+    quantity: Float!
+    price: Float!
+}
+
 type CartItemProduct {
     sku: String!
     name: String
