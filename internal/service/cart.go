@@ -51,9 +51,9 @@ func NewCartService(
 	pipeline := totals.NewPipeline(
 		&totals.SubtotalCollector{},                          // 100
 		&totals.DiscountCollector{CouponRepo: couponRepo},    // 300
-		&totals.ShippingCollector{},                          // 350
-		// &totals.ShippingTaxCollector{},                    // 375 — Phase 3 (#21)
-		&totals.TaxCollector{TaxRepo: taxRepo},               // 450
+		&totals.ShippingCollector{},                                     // 350
+		&totals.ShippingTaxCollector{TaxRepo: taxRepo, CP: cp},         // 375
+		&totals.TaxCollector{TaxRepo: taxRepo},                         // 450
 		&totals.GrandTotalCollector{},                        // 550
 	)
 
