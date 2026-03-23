@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1: Complete. Phase 2: 2/5 done (coupons + configurable products).** 21 tests passing (17 integration + 4 comparison). Architecture: totals pipeline, carrier registry, error constants.
+**Phase 1: Complete. Phase 2: 4/5 done (coupons, configurable, mergeCarts, estimates). Bundle products remaining.** 25 tests (21 integration + 4 comparison). Architecture: totals pipeline, carrier registry, error constants.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
