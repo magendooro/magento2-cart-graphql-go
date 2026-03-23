@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1: 7 of 9 tasks complete.** Cart creation, add-to-cart (simple products), addresses, shipping, payment, tax, guest email all working. Remaining: place order (#8) and tests (#9).
+**Phase 1: Complete (9/9 tasks).** Full guest checkout flow verified field-by-field against Magento PHP: cart creation, add-to-cart, addresses, shipping (flatrate per-item), payment (checkmo), tax, guest email, place order, and 8 tests (6 integration + 2 comparison).
 
 ## Build & Test
 
