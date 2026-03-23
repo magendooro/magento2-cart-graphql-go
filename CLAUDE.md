@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1: Complete (9/9 tasks).** Full guest checkout flow verified field-by-field against Magento PHP. All 8 tests passing (6 integration + 2 comparison). Implementation audited and synced against actual Magento DB schema (PR #28).
+**Phase 1: Complete. Phase 2: 1/5 done (coupon codes).** 19 tests passing (16 integration + 3 comparison). Architecture refactored with totals pipeline, carrier registry, error constants.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
@@ -22,10 +22,11 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 - Tax: US state-level, product tax class via eav_attribute.default_value fallback
 - Totals recalculation after every cart modification
 - Place order: full transactional flow with correct sales_order fields, address ID backfill, grid data
+- Coupon codes: applyCouponToCart/removeCouponFromCart with by_percent, by_fixed, cart_fixed via DiscountCollector pipeline
 
 ### Known gaps (documented as GitHub issues)
-- PlaceOrderOutput schema uses simplified `PlacedOrder{number}` instead of Magento's `CustomerOrder` type with `errors: [PlaceOrderError!]!` field — Magento clients expecting structured errors in data payload will see GraphQL-level errors instead
-- Discount amounts hardcoded to 0 on placed orders (coupon monetary effect not propagated to sales_order)
+- PlaceOrderOutput schema uses simplified `PlacedOrder{number}` instead of Magento's `CustomerOrder` type with `errors: [PlaceOrderError!]!` field (#29)
+- Discount amounts not yet propagated to placed order sales_order rows (#30)
 - `product_options` JSON not stored on sales_order_item
 - `remote_ip` not captured on sales_order
 - `email_sent` not set (Go doesn't send order emails)

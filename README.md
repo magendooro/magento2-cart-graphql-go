@@ -1,6 +1,6 @@
 # magento2-cart-graphql-go
 
-High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior. Phase 1 complete with full guest checkout flow verified field-by-field against Magento 2.4.8 PHP (8 tests passing).
+High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior. Phase 1 complete + coupon codes. 19 tests (16 integration + 3 comparison) verified field-by-field against Magento 2.4.8 PHP.
 
 ## Quick Start
 
@@ -38,8 +38,8 @@ Default port: **8084**.
 | `setPaymentMethodOnCart` | ✅ | checkmo, free, banktransfer |
 | `setGuestEmailOnCart` | ✅ | |
 | `placeOrder` | ✅ | Transactional quote→order with inventory reservation |
-| `applyCouponToCart` | 🔲 Phase 2a | Salesrule integration |
-| `removeCouponFromCart` | 🔲 Phase 2a | |
+| `applyCouponToCart` | ✅ | Salesrule validation, by_percent/by_fixed/cart_fixed |
+| `removeCouponFromCart` | ✅ | Clears coupon and recalculates totals |
 | `mergeCarts` | 🔲 Phase 2d | Guest→customer merge |
 | `estimateShippingMethods` | 🔲 Phase 2e | Non-committing estimate |
 
