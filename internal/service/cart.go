@@ -407,6 +407,109 @@ func (s *CartService) AssignCustomerToGuestCart(ctx context.Context, guestCartID
 	return s.GetCart(ctx, maskedID)
 }
 
+// EstimateShippingMethods returns available shipping methods for a temporary address
+// without persisting anything to the cart.
+func (s *CartService) EstimateShippingMethods(ctx context.Context, input model.EstimateShippingMethodsInput) ([]*model.AvailableShippingMethod, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, input.CartID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(input.CartID)
+	}
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(input.CartID)
+	}
+
+	storeID := middleware.GetStoreID(ctx)
+	req := &shipping.RateRequest{
+		StoreID:   storeID,
+		WebsiteID: s.cp.GetWebsiteID(storeID),
+		CountryID: input.Address.CountryCode,
+		RegionID:  input.Address.RegionID,
+		Postcode:  input.Address.Postcode,
+		Subtotal:  cart.Subtotal,
+		ItemQty:   cart.ItemsQty,
+	}
+	rates := s.shippingRegistry.CollectRates(ctx, req)
+
+	currency := model.CurrencyEnum(cart.QuoteCurrencyCode)
+	var result []*model.AvailableShippingMethod
+	for _, r := range rates {
+		price := r.Price
+		result = append(result, &model.AvailableShippingMethod{
+			CarrierCode:  r.CarrierCode,
+			CarrierTitle: r.CarrierTitle,
+			MethodCode:   r.MethodCode,
+			MethodTitle:  r.MethodTitle,
+			Amount:       &model.Money{Value: &price, Currency: &currency},
+			Available:    true,
+		})
+	}
+	return result, nil
+}
+
+// EstimateTotals returns estimated cart totals for a temporary address and optional shipping method.
+func (s *CartService) EstimateTotals(ctx context.Context, input model.EstimateTotalsInput) (*model.EstimateTotalsOutput, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, input.CartID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(input.CartID)
+	}
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(input.CartID)
+	}
+	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
+
+	// Build a temporary address for the pipeline
+	tempAddr := &repository.CartAddressData{
+		AddressType: "shipping",
+		CountryID:   input.Address.CountryCode,
+		RegionID:    input.Address.RegionID,
+		Postcode:    input.Address.Postcode,
+	}
+
+	// If shipping method specified, estimate its cost
+	if input.ShippingMethod != nil {
+		storeID := middleware.GetStoreID(ctx)
+		req := &shipping.RateRequest{
+			StoreID:   storeID,
+			WebsiteID: s.cp.GetWebsiteID(storeID),
+			CountryID: input.Address.CountryCode,
+			RegionID:  input.Address.RegionID,
+			Postcode:  input.Address.Postcode,
+			Subtotal:  cart.Subtotal,
+			ItemQty:   cart.ItemsQty,
+		}
+		rates := s.shippingRegistry.CollectRates(ctx, req)
+		for _, r := range rates {
+			if r.CarrierCode == input.ShippingMethod.CarrierCode && r.MethodCode == input.ShippingMethod.MethodCode {
+				tempAddr.ShippingAmount = r.Price
+				break
+			}
+		}
+	}
+
+	// Run pipeline with temporary address
+	cc := &totals.CollectorContext{
+		Quote:   cart,
+		Items:   items,
+		Address: tempAddr,
+		StoreID: cart.StoreID,
+	}
+	total, err := s.pipeline.Collect(ctx, cc)
+	if err != nil {
+		return nil, err
+	}
+
+	currency := model.CurrencyEnum(cart.QuoteCurrencyCode)
+	return &model.EstimateTotalsOutput{
+		GrandTotal: &model.Money{Value: &total.GrandTotal, Currency: &currency},
+		Subtotal:   &model.Money{Value: &total.Subtotal, Currency: &currency},
+		Tax:        &model.Money{Value: &total.TaxAmount, Currency: &currency},
+		Shipping:   &model.Money{Value: &total.ShippingAmount, Currency: &currency},
+		Discount:   &model.Money{Value: &total.DiscountAmount, Currency: &currency},
+	}, nil
+}
+
 // ApplyCoupon validates and applies a coupon code to the cart.
 func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)

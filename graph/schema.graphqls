@@ -54,6 +54,12 @@ type Mutation {
 
     """Transfer a guest cart to an authenticated customer."""
     assignCustomerToGuestCart(cart_id: String!): Cart!
+
+    """Estimate shipping methods for a cart without saving the address."""
+    estimateShippingMethods(input: EstimateShippingMethodsInput!): [AvailableShippingMethod]
+
+    """Estimate totals for a cart with a temporary address and shipping method."""
+    estimateTotals(input: EstimateTotalsInput!): EstimateTotalsOutput
 }
 
 # ─── Cart Type ───────────────────────────────────────────────────────────────
@@ -345,6 +351,24 @@ input RemoveCouponFromCartInput {
     cart_id: String!
 }
 
+input EstimateShippingMethodsInput {
+    cart_id: String!
+    address: EstimateAddressInput!
+}
+
+input EstimateTotalsInput {
+    cart_id: String!
+    address: EstimateAddressInput!
+    shipping_method: ShippingMethodInput
+}
+
+input EstimateAddressInput {
+    country_code: String!
+    region: String
+    region_id: Int
+    postcode: String
+}
+
 # ─── Output Types ────────────────────────────────────────────────────────────
 
 type CreateGuestCartOutput {
@@ -410,6 +434,14 @@ type ApplyCouponToCartOutput {
 
 type RemoveCouponFromCartOutput {
     cart: Cart!
+}
+
+type EstimateTotalsOutput {
+    grand_total: Money
+    subtotal: Money
+    tax: Money
+    shipping: Money
+    discount: Money
 }
 
 # ─── Enums ───────────────────────────────────────────────────────────────────

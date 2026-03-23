@@ -140,6 +140,16 @@ func (r *mutationResolver) AssignCustomerToGuestCart(ctx context.Context, cartID
 	return r.CartService.AssignCustomerToGuestCart(ctx, cartID)
 }
 
+// EstimateShippingMethods is the resolver for the estimateShippingMethods field.
+func (r *mutationResolver) EstimateShippingMethods(ctx context.Context, input model.EstimateShippingMethodsInput) ([]*model.AvailableShippingMethod, error) {
+	return r.CartService.EstimateShippingMethods(ctx, input)
+}
+
+// EstimateTotals is the resolver for the estimateTotals field.
+func (r *mutationResolver) EstimateTotals(ctx context.Context, input model.EstimateTotalsInput) (*model.EstimateTotalsOutput, error) {
+	return r.CartService.EstimateTotals(ctx, input)
+}
+
 // Cart is the resolver for the cart field.
 func (r *queryResolver) Cart(ctx context.Context, cartID string) (*model.Cart, error) {
 	return r.CartService.GetCart(ctx, cartID)

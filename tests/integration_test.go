@@ -767,3 +767,92 @@ func TestAssignCustomerToGuestCartUnauthenticated(t *testing.T) {
 		t.Errorf("error message mismatch:\n  got:    %q\n  expect: %q", resp.Errors[0].Message, expected)
 	}
 }
+
+func TestEstimateShippingMethods(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		estimateShippingMethods(input: {
+			cart_id: "%s"
+			address: { country_code: "US", region_id: 57, postcode: "78701" }
+		}) {
+			carrier_code method_code carrier_title method_title amount { value } available
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("estimate shipping: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		EstimateShippingMethods []struct {
+			CarrierCode  string `json:"carrier_code"`
+			MethodCode   string `json:"method_code"`
+			CarrierTitle string `json:"carrier_title"`
+			Available    bool   `json:"available"`
+			Amount       struct{ Value float64 } `json:"amount"`
+		} `json:"estimateShippingMethods"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.EstimateShippingMethods) == 0 {
+		t.Fatal("expected at least 1 shipping method")
+	}
+	// Should have flatrate at minimum
+	foundFlatrate := false
+	for _, m := range data.EstimateShippingMethods {
+		if m.CarrierCode == "flatrate" {
+			foundFlatrate = true
+			if m.Amount.Value != 5 { // per-item, 1 item
+				t.Errorf("expected flatrate $5, got %v", m.Amount.Value)
+			}
+		}
+	}
+	if !foundFlatrate {
+		t.Error("expected flatrate in available methods")
+	}
+}
+
+func TestEstimateTotals(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		estimateTotals(input: {
+			cart_id: "%s"
+			address: { country_code: "US", region_id: 57, postcode: "78701" }
+			shipping_method: { carrier_code: "flatrate", method_code: "flatrate" }
+		}) {
+			grand_total { value }
+			subtotal { value }
+			shipping { value }
+			tax { value }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("estimate totals: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		EstimateTotals struct {
+			GrandTotal struct{ Value float64 } `json:"grand_total"`
+			Subtotal   struct{ Value float64 } `json:"subtotal"`
+			Shipping   struct{ Value float64 } `json:"shipping"`
+			Tax        struct{ Value float64 } `json:"tax"`
+		} `json:"estimateTotals"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if data.EstimateTotals.Subtotal.Value != 34 {
+		t.Errorf("expected subtotal 34, got %v", data.EstimateTotals.Subtotal.Value)
+	}
+	if data.EstimateTotals.Shipping.Value != 5 {
+		t.Errorf("expected shipping 5, got %v", data.EstimateTotals.Shipping.Value)
+	}
+	// Grand total = subtotal + shipping + tax
+	if data.EstimateTotals.GrandTotal.Value != data.EstimateTotals.Subtotal.Value+data.EstimateTotals.Shipping.Value+data.EstimateTotals.Tax.Value {
+		t.Errorf("grand_total mismatch: %v != %v + %v + %v",
+			data.EstimateTotals.GrandTotal.Value,
+			data.EstimateTotals.Subtotal.Value,
+			data.EstimateTotals.Shipping.Value,
+			data.EstimateTotals.Tax.Value)
+	}
+}

@@ -163,6 +163,14 @@ type ComplexityRoot struct {
 		Label  func(childComplexity int) int
 	}
 
+	EstimateTotalsOutput struct {
+		Discount   func(childComplexity int) int
+		GrandTotal func(childComplexity int) int
+		Shipping   func(childComplexity int) int
+		Subtotal   func(childComplexity int) int
+		Tax        func(childComplexity int) int
+	}
+
 	Money struct {
 		Currency func(childComplexity int) int
 		Value    func(childComplexity int) int
@@ -174,6 +182,8 @@ type ComplexityRoot struct {
 		AssignCustomerToGuestCart  func(childComplexity int, cartID string) int
 		CreateEmptyCart            func(childComplexity int, input *model.CreateEmptyCartInput) int
 		CreateGuestCart            func(childComplexity int, input *model.CreateGuestCartInput) int
+		EstimateShippingMethods    func(childComplexity int, input model.EstimateShippingMethodsInput) int
+		EstimateTotals             func(childComplexity int, input model.EstimateTotalsInput) int
 		MergeCarts                 func(childComplexity int, sourceCartID string, destinationCartID *string) int
 		PlaceOrder                 func(childComplexity int, input *model.PlaceOrderInput) int
 		RemoveCouponFromCart       func(childComplexity int, input *model.RemoveCouponFromCartInput) int
@@ -290,6 +300,8 @@ type MutationResolver interface {
 	RemoveCouponFromCart(ctx context.Context, input *model.RemoveCouponFromCartInput) (*model.RemoveCouponFromCartOutput, error)
 	MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error)
 	AssignCustomerToGuestCart(ctx context.Context, cartID string) (*model.Cart, error)
+	EstimateShippingMethods(ctx context.Context, input model.EstimateShippingMethodsInput) ([]*model.AvailableShippingMethod, error)
+	EstimateTotals(ctx context.Context, input model.EstimateTotalsInput) (*model.EstimateTotalsOutput, error)
 }
 type QueryResolver interface {
 	Cart(ctx context.Context, cartID string) (*model.Cart, error)
@@ -749,6 +761,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Discount.Label(childComplexity), true
 
+	case "EstimateTotalsOutput.discount":
+		if e.ComplexityRoot.EstimateTotalsOutput.Discount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EstimateTotalsOutput.Discount(childComplexity), true
+	case "EstimateTotalsOutput.grand_total":
+		if e.ComplexityRoot.EstimateTotalsOutput.GrandTotal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EstimateTotalsOutput.GrandTotal(childComplexity), true
+	case "EstimateTotalsOutput.shipping":
+		if e.ComplexityRoot.EstimateTotalsOutput.Shipping == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EstimateTotalsOutput.Shipping(childComplexity), true
+	case "EstimateTotalsOutput.subtotal":
+		if e.ComplexityRoot.EstimateTotalsOutput.Subtotal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EstimateTotalsOutput.Subtotal(childComplexity), true
+	case "EstimateTotalsOutput.tax":
+		if e.ComplexityRoot.EstimateTotalsOutput.Tax == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EstimateTotalsOutput.Tax(childComplexity), true
+
 	case "Money.currency":
 		if e.ComplexityRoot.Money.Currency == nil {
 			break
@@ -817,6 +860,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateGuestCart(childComplexity, args["input"].(*model.CreateGuestCartInput)), true
+	case "Mutation.estimateShippingMethods":
+		if e.ComplexityRoot.Mutation.EstimateShippingMethods == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_estimateShippingMethods_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.EstimateShippingMethods(childComplexity, args["input"].(model.EstimateShippingMethodsInput)), true
+	case "Mutation.estimateTotals":
+		if e.ComplexityRoot.Mutation.EstimateTotals == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_estimateTotals_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.EstimateTotals(childComplexity, args["input"].(model.EstimateTotalsInput)), true
 	case "Mutation.mergeCarts":
 		if e.ComplexityRoot.Mutation.MergeCarts == nil {
 			break
@@ -1198,6 +1263,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCartItemUpdateInput,
 		ec.unmarshalInputCreateGuestCartInput,
 		ec.unmarshalInputEnteredOptionInput,
+		ec.unmarshalInputEstimateAddressInput,
+		ec.unmarshalInputEstimateShippingMethodsInput,
+		ec.unmarshalInputEstimateTotalsInput,
 		ec.unmarshalInputPaymentMethodInput,
 		ec.unmarshalInputPlaceOrderInput,
 		ec.unmarshalInputRemoveCouponFromCartInput,
@@ -1358,6 +1426,28 @@ func (ec *executionContext) field_Mutation_createGuestCart_args(ctx context.Cont
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOCreateGuestCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateGuestCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_estimateShippingMethods_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNEstimateShippingMethodsInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateShippingMethodsInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_estimateTotals_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNEstimateTotalsInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateTotalsInput)
 	if err != nil {
 		return nil, err
 	}
@@ -3888,6 +3978,181 @@ func (ec *executionContext) fieldContext_Discount_label(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _EstimateTotalsOutput_grand_total(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_EstimateTotalsOutput_grand_total,
+		func(ctx context.Context) (any, error) {
+			return obj.GrandTotal, nil
+		},
+		nil,
+		ec.marshalOMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_EstimateTotalsOutput_grand_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EstimateTotalsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EstimateTotalsOutput_subtotal(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_EstimateTotalsOutput_subtotal,
+		func(ctx context.Context) (any, error) {
+			return obj.Subtotal, nil
+		},
+		nil,
+		ec.marshalOMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_EstimateTotalsOutput_subtotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EstimateTotalsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EstimateTotalsOutput_tax(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_EstimateTotalsOutput_tax,
+		func(ctx context.Context) (any, error) {
+			return obj.Tax, nil
+		},
+		nil,
+		ec.marshalOMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_EstimateTotalsOutput_tax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EstimateTotalsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EstimateTotalsOutput_shipping(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_EstimateTotalsOutput_shipping,
+		func(ctx context.Context) (any, error) {
+			return obj.Shipping, nil
+		},
+		nil,
+		ec.marshalOMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_EstimateTotalsOutput_shipping(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EstimateTotalsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EstimateTotalsOutput_discount(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_EstimateTotalsOutput_discount,
+		func(ctx context.Context) (any, error) {
+			return obj.Discount, nil
+		},
+		nil,
+		ec.marshalOMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_EstimateTotalsOutput_discount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EstimateTotalsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Money_value(ctx context.Context, field graphql.CollectedField, obj *model.Money) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4653,6 +4918,114 @@ func (ec *executionContext) fieldContext_Mutation_assignCustomerToGuestCart(ctx 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_assignCustomerToGuestCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_estimateShippingMethods(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_estimateShippingMethods,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().EstimateShippingMethods(ctx, fc.Args["input"].(model.EstimateShippingMethodsInput))
+		},
+		nil,
+		ec.marshalOAvailableShippingMethod2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAvailableShippingMethod,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_estimateShippingMethods(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "carrier_code":
+				return ec.fieldContext_AvailableShippingMethod_carrier_code(ctx, field)
+			case "carrier_title":
+				return ec.fieldContext_AvailableShippingMethod_carrier_title(ctx, field)
+			case "method_code":
+				return ec.fieldContext_AvailableShippingMethod_method_code(ctx, field)
+			case "method_title":
+				return ec.fieldContext_AvailableShippingMethod_method_title(ctx, field)
+			case "amount":
+				return ec.fieldContext_AvailableShippingMethod_amount(ctx, field)
+			case "available":
+				return ec.fieldContext_AvailableShippingMethod_available(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AvailableShippingMethod", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_estimateShippingMethods_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_estimateTotals(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_estimateTotals,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().EstimateTotals(ctx, fc.Args["input"].(model.EstimateTotalsInput))
+		},
+		nil,
+		ec.marshalOEstimateTotalsOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateTotalsOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_estimateTotals(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "grand_total":
+				return ec.fieldContext_EstimateTotalsOutput_grand_total(ctx, field)
+			case "subtotal":
+				return ec.fieldContext_EstimateTotalsOutput_subtotal(ctx, field)
+			case "tax":
+				return ec.fieldContext_EstimateTotalsOutput_tax(ctx, field)
+			case "shipping":
+				return ec.fieldContext_EstimateTotalsOutput_shipping(ctx, field)
+			case "discount":
+				return ec.fieldContext_EstimateTotalsOutput_discount(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type EstimateTotalsOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_estimateTotals_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -8010,6 +8383,138 @@ func (ec *executionContext) unmarshalInputEnteredOptionInput(ctx context.Context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputEstimateAddressInput(ctx context.Context, obj any) (model.EstimateAddressInput, error) {
+	var it model.EstimateAddressInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"country_code", "region", "region_id", "postcode"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "country_code":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("country_code"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CountryCode = data
+		case "region":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("region"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Region = data
+		case "region_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("region_id"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RegionID = data
+		case "postcode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("postcode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Postcode = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputEstimateShippingMethodsInput(ctx context.Context, obj any) (model.EstimateShippingMethodsInput, error) {
+	var it model.EstimateShippingMethodsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "address"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "address":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
+			data, err := ec.unmarshalNEstimateAddressInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateAddressInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Address = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputEstimateTotalsInput(ctx context.Context, obj any) (model.EstimateTotalsInput, error) {
+	var it model.EstimateTotalsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "address", "shipping_method"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "address":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
+			data, err := ec.unmarshalNEstimateAddressInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateAddressInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Address = data
+		case "shipping_method":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("shipping_method"))
+			data, err := ec.unmarshalOShippingMethodInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐShippingMethodInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ShippingMethod = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputPaymentMethodInput(ctx context.Context, obj any) (model.PaymentMethodInput, error) {
 	var it model.PaymentMethodInput
 	if obj == nil {
@@ -9401,6 +9906,50 @@ func (ec *executionContext) _Discount(ctx context.Context, sel ast.SelectionSet,
 	return out
 }
 
+var estimateTotalsOutputImplementors = []string{"EstimateTotalsOutput"}
+
+func (ec *executionContext) _EstimateTotalsOutput(ctx context.Context, sel ast.SelectionSet, obj *model.EstimateTotalsOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, estimateTotalsOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EstimateTotalsOutput")
+		case "grand_total":
+			out.Values[i] = ec._EstimateTotalsOutput_grand_total(ctx, field, obj)
+		case "subtotal":
+			out.Values[i] = ec._EstimateTotalsOutput_subtotal(ctx, field, obj)
+		case "tax":
+			out.Values[i] = ec._EstimateTotalsOutput_tax(ctx, field, obj)
+		case "shipping":
+			out.Values[i] = ec._EstimateTotalsOutput_shipping(ctx, field, obj)
+		case "discount":
+			out.Values[i] = ec._EstimateTotalsOutput_discount(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moneyImplementors = []string{"Money"}
 
 func (ec *executionContext) _Money(ctx context.Context, sel ast.SelectionSet, obj *model.Money) graphql.Marshaler {
@@ -9524,6 +10073,14 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "estimateShippingMethods":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_estimateShippingMethods(ctx, field)
+			})
+		case "estimateTotals":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_estimateTotals(ctx, field)
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10784,6 +11341,21 @@ func (ec *executionContext) unmarshalNEnteredOptionInput2ᚖgithubᚗcomᚋmagen
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNEstimateAddressInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateAddressInput(ctx context.Context, v any) (*model.EstimateAddressInput, error) {
+	res, err := ec.unmarshalInputEstimateAddressInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNEstimateShippingMethodsInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateShippingMethodsInput(ctx context.Context, v any) (model.EstimateShippingMethodsInput, error) {
+	res, err := ec.unmarshalInputEstimateShippingMethodsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNEstimateTotalsInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateTotalsInput(ctx context.Context, v any) (model.EstimateTotalsInput, error) {
+	res, err := ec.unmarshalInputEstimateTotalsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
 	res, err := graphql.UnmarshalFloatContext(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -11432,6 +12004,13 @@ func (ec *executionContext) unmarshalOEnteredOptionInput2ᚕᚖgithubᚗcomᚋma
 	return res, nil
 }
 
+func (ec *executionContext) marshalOEstimateTotalsOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEstimateTotalsOutput(ctx context.Context, sel ast.SelectionSet, v *model.EstimateTotalsOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._EstimateTotalsOutput(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v any) (*float64, error) {
 	if v == nil {
 		return nil, nil
@@ -11674,6 +12253,14 @@ func (ec *executionContext) marshalOShippingCartAddress2ᚖgithubᚗcomᚋmagend
 		return graphql.Null
 	}
 	return ec._ShippingCartAddress(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOShippingMethodInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐShippingMethodInput(ctx context.Context, v any) (*model.ShippingMethodInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputShippingMethodInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {

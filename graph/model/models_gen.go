@@ -207,6 +207,32 @@ type EnteredOptionInput struct {
 	Value string `json:"value"`
 }
 
+type EstimateAddressInput struct {
+	CountryCode string  `json:"country_code"`
+	Region      *string `json:"region,omitempty"`
+	RegionID    *int    `json:"region_id,omitempty"`
+	Postcode    *string `json:"postcode,omitempty"`
+}
+
+type EstimateShippingMethodsInput struct {
+	CartID  string                `json:"cart_id"`
+	Address *EstimateAddressInput `json:"address"`
+}
+
+type EstimateTotalsInput struct {
+	CartID         string                `json:"cart_id"`
+	Address        *EstimateAddressInput `json:"address"`
+	ShippingMethod *ShippingMethodInput  `json:"shipping_method,omitempty"`
+}
+
+type EstimateTotalsOutput struct {
+	GrandTotal *Money `json:"grand_total,omitempty"`
+	Subtotal   *Money `json:"subtotal,omitempty"`
+	Tax        *Money `json:"tax,omitempty"`
+	Shipping   *Money `json:"shipping,omitempty"`
+	Discount   *Money `json:"discount,omitempty"`
+}
+
 type Money struct {
 	Value    *float64      `json:"value,omitempty"`
 	Currency *CurrencyEnum `json:"currency,omitempty"`
