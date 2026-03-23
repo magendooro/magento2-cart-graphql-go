@@ -87,6 +87,12 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 	shippingInclTax := shippingAmount // no tax on shipping yet
 	customerGroupID := 0             // guest default
 
+	// Compute discount from cart totals
+	discountAmount := 0.0
+	if cart.SubtotalWithDiscount > 0 && cart.SubtotalWithDiscount < cart.Subtotal {
+		discountAmount = cart.Subtotal - cart.SubtotalWithDiscount
+	}
+
 	// 2. Insert sales_order
 	orderResult, err := tx.ExecContext(ctx, `
 		INSERT INTO sales_order (
@@ -121,7 +127,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 			?, ?,
 			?, ?,
 			?, ?,
-			0, 0,
+			?, ?,
 			0, 0,
 			0, 0,
 			0, 0,
@@ -142,6 +148,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 		taxAmount, taxAmount,
 		shippingAmount, shippingAmount,
 		shippingInclTax, shippingInclTax,
+		discountAmount, discountAmount,
 		totalQty, totalItemCount,
 		cart.GrandTotal, cart.GrandTotal,
 		cart.BaseCurrencyCode, cart.QuoteCurrencyCode,
@@ -177,7 +184,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 				?, ?,
 				?, ?,
 				?, ?, ?,
-				0, 0, 0,
+				?, ?, ?,
 				0, 0,
 				0, ?, NOW(), NOW()
 			)`,
@@ -188,6 +195,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 			item.RowTotal, item.RowTotal,
 			rowTotalInclTax, rowTotalInclTax,
 			item.TaxPercent, item.TaxAmount, item.TaxAmount,
+			item.DiscountPercent(), item.DiscountAmount, item.DiscountAmount,
 			cart.StoreID,
 		)
 		if err != nil {

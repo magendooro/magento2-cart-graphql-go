@@ -103,7 +103,8 @@ func (r *CartRepository) GetActiveByCustomerID(ctx context.Context, customerID, 
 }
 
 // UpdateTotals updates the computed totals on the quote.
-func (r *CartRepository) UpdateTotals(ctx context.Context, entityID int, subtotal, grandTotal float64, itemsCount int, itemsQty float64) error {
+func (r *CartRepository) UpdateTotals(ctx context.Context, entityID int, subtotal, grandTotal, discountAmount float64, itemsCount int, itemsQty float64) error {
+	subtotalWithDiscount := subtotal - discountAmount
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE quote SET subtotal = ?, base_subtotal = ?,
 			grand_total = ?, base_grand_total = ?,
@@ -112,7 +113,7 @@ func (r *CartRepository) UpdateTotals(ctx context.Context, entityID int, subtota
 		WHERE entity_id = ?`,
 		subtotal, subtotal,
 		grandTotal, grandTotal,
-		subtotal,
+		subtotalWithDiscount,
 		itemsCount, itemsQty, entityID,
 	)
 	return err

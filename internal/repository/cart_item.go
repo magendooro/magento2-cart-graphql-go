@@ -26,6 +26,14 @@ type CartItemData struct {
 	ProductTaxClassID  int // resolved from catalog_product_entity_int
 }
 
+// DiscountPercent computes the discount percentage from discount_amount and row_total.
+func (d *CartItemData) DiscountPercent() float64 {
+	if d.RowTotal == 0 || d.DiscountAmount == 0 {
+		return 0
+	}
+	return (d.DiscountAmount / d.RowTotal) * 100
+}
+
 type CartItemRepository struct {
 	db *sql.DB
 }

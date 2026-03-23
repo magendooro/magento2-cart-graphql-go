@@ -656,7 +656,7 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error 
 		}
 	}
 
-	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, len(items), itemsQty)
+	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty)
 }
 
 // collectTotals runs the pipeline without persisting — used for display and order placement.
