@@ -29,6 +29,7 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 	paymentRepo := repository.NewPaymentRepository(db, cp)
 	taxRepo := repository.NewTaxRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
+	couponRepo := repository.NewCouponRepository(db)
 
 	// Build carrier registry (Strategy pattern — each carrier is independent)
 	shippingRegistry := shipping.NewRegistry(
@@ -37,7 +38,7 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 		&shipping.FreeshippingCarrier{CP: cp},
 	)
 
-	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, shippingRegistry, paymentRepo, taxRepo, orderRepo, cp)
+	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, shippingRegistry, paymentRepo, taxRepo, orderRepo, couponRepo, cp)
 
 	return &Resolver{
 		CartService: cartService,

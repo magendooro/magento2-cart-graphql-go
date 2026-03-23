@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -637,6 +638,135 @@ func comparePlaceOrder(t *testing.T, goResp, mResp gqlResponse) {
 	t.Logf("PASS: placeOrder succeeded — Go=#%s, Magento=#%s", goNum, mNum)
 }
 
+// ─── Coupon Comparison ──────────────────────────────────────────────────────
+
+func TestCompare_CouponApplyRemove(t *testing.T) {
+	// Create carts on both
+	goResp := doQuery(t, `mutation { createEmptyCart }`, "")
+	mResp := doMagentoQuery(t, `mutation { createEmptyCart }`, "")
+	var goCreate, mCreate struct{ CreateEmptyCart string `json:"createEmptyCart"` }
+	json.Unmarshal(goResp.Data, &goCreate)
+	json.Unmarshal(mResp.Data, &mCreate)
+	goCartID := goCreate.CreateEmptyCart
+	mCartID := mCreate.CreateEmptyCart
+
+	// Add water bottle (24-UG06, $7) — the product H20 coupon targets
+	addQ := func(id string) string {
+		return fmt.Sprintf(`mutation { addProductsToCart(cartId: "%s", cartItems: [{sku: "24-UG06", quantity: 1}]) { cart { total_quantity } user_errors { message } } }`, id)
+	}
+	doQuery(t, addQ(goCartID), "")
+	doMagentoQuery(t, addQ(mCartID), "")
+
+	// Apply H20 coupon
+	couponQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			applyCouponToCart(input: {cart_id: "%s", coupon_code: "H20"}) {
+				cart {
+					applied_coupons { code }
+					prices {
+						subtotal_excluding_tax { value }
+						subtotal_with_discount_excluding_tax { value }
+						grand_total { value }
+						discounts { amount { value } label }
+					}
+					items { prices { total_item_discount { value } } }
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, couponQ(goCartID), "")
+	mResp = doMagentoQuery(t, couponQ(mCartID), "")
+
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go applyCoupon error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento applyCoupon error: %s", mResp.Errors[0].Message)
+	}
+
+	type couponResp struct {
+		ApplyCouponToCart struct {
+			Cart struct {
+				AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+				Prices         struct {
+					SubtotalExcludingTax             struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					SubtotalWithDiscountExcludingTax struct{ Value float64 } `json:"subtotal_with_discount_excluding_tax"`
+					GrandTotal                       struct{ Value float64 } `json:"grand_total"`
+					Discounts                        []struct {
+						Amount struct{ Value float64 } `json:"amount"`
+					} `json:"discounts"`
+				} `json:"prices"`
+				Items []struct {
+					Prices struct {
+						TotalItemDiscount *struct{ Value float64 } `json:"total_item_discount"`
+					} `json:"prices"`
+				} `json:"items"`
+			} `json:"cart"`
+		} `json:"applyCouponToCart"`
+	}
+
+	var goData, mData couponResp
+	json.Unmarshal(goResp.Data, &goData)
+	json.Unmarshal(mResp.Data, &mData)
+
+	goCart := goData.ApplyCouponToCart.Cart
+	mCart := mData.ApplyCouponToCart.Cart
+
+	assertEq(t, "coupon.code", goCart.AppliedCoupons[0].Code, mCart.AppliedCoupons[0].Code)
+	assertEq(t, "coupon.subtotal", goCart.Prices.SubtotalExcludingTax.Value, mCart.Prices.SubtotalExcludingTax.Value)
+	assertEq(t, "coupon.subtotal_with_discount", goCart.Prices.SubtotalWithDiscountExcludingTax.Value, mCart.Prices.SubtotalWithDiscountExcludingTax.Value)
+	assertEq(t, "coupon.grand_total", goCart.Prices.GrandTotal.Value, mCart.Prices.GrandTotal.Value)
+
+	if len(goCart.Prices.Discounts) > 0 && len(mCart.Prices.Discounts) > 0 {
+		assertEq(t, "coupon.discount_amount", goCart.Prices.Discounts[0].Amount.Value, mCart.Prices.Discounts[0].Amount.Value)
+	}
+
+	t.Logf("PASS: applyCouponToCart — Go grand_total=%.2f, Magento grand_total=%.2f", goCart.Prices.GrandTotal.Value, mCart.Prices.GrandTotal.Value)
+
+	// Remove coupon and compare
+	removeQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			removeCouponFromCart(input: {cart_id: "%s"}) {
+				cart {
+					applied_coupons { code }
+					prices { grand_total { value } discounts { amount { value } } }
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, removeQ(goCartID), "")
+	mResp = doMagentoQuery(t, removeQ(mCartID), "")
+
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go removeCoupon error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento removeCoupon error: %s", mResp.Errors[0].Message)
+	}
+
+	type removeResp struct {
+		RemoveCouponFromCart struct {
+			Cart struct {
+				AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+				Prices         struct {
+					GrandTotal struct{ Value float64 } `json:"grand_total"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"removeCouponFromCart"`
+	}
+
+	var goRemove, mRemove removeResp
+	json.Unmarshal(goResp.Data, &goRemove)
+	json.Unmarshal(mResp.Data, &mRemove)
+
+	assertEq(t, "remove.grand_total",
+		goRemove.RemoveCouponFromCart.Cart.Prices.GrandTotal.Value,
+		mRemove.RemoveCouponFromCart.Cart.Prices.GrandTotal.Value)
+	t.Logf("PASS: removeCouponFromCart — grand_total back to %.2f", goRemove.RemoveCouponFromCart.Cart.Prices.GrandTotal.Value)
+}
+
 // ─── Error Behavior Comparison ──────────────────────────────────────────────
 
 func TestCompare_EmptyCartPlaceOrder(t *testing.T) {
@@ -679,6 +809,15 @@ func TestCompare_EmptyCartPlaceOrder(t *testing.T) {
 
 func assertEq(t *testing.T, field string, goVal, magentoVal any) {
 	t.Helper()
+	// For float64 values, use tolerance comparison
+	if goF, ok := goVal.(float64); ok {
+		if mF, ok := magentoVal.(float64); ok {
+			if math.Abs(goF-mF) > 0.005 {
+				t.Errorf("%s mismatch:\n  Go:      %v\n  Magento: %v", field, goVal, magentoVal)
+			}
+			return
+		}
+	}
 	goStr := fmt.Sprintf("%v", goVal)
 	mStr := fmt.Sprintf("%v", magentoVal)
 	if goStr != mStr {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -268,5 +269,378 @@ func TestCartNotFound(t *testing.T) {
 	resp := doQuery(t, `{ cart(cart_id: "aaaabbbbccccddddeeeeffffgggghhhh") { id } }`, "")
 	if len(resp.Errors) == 0 {
 		t.Fatal("expected error for nonexistent cart")
+	}
+}
+
+// createTestCart is a helper that creates a cart and returns its masked ID.
+func createTestCart(t *testing.T) string {
+	t.Helper()
+	resp := doQuery(t, `mutation { createEmptyCart }`, "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("create cart: %s", resp.Errors[0].Message)
+	}
+	var data struct{ CreateEmptyCart string `json:"createEmptyCart"` }
+	json.Unmarshal(resp.Data, &data)
+	return data.CreateEmptyCart
+}
+
+// addTestProduct adds a product to a cart and returns the cart state.
+func addTestProduct(t *testing.T, cartID, sku string, qty int) {
+	t.Helper()
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		addProductsToCart(cartId: "%s", cartItems: [{sku: "%s", quantity: %d}]) {
+			cart { total_quantity }
+			user_errors { code message }
+		}
+	}`, cartID, sku, qty), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("add product: %s", resp.Errors[0].Message)
+	}
+}
+
+func TestUpdateCartItems(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	// Get item UID
+	resp := doQuery(t, `{ cart(cart_id: "`+cartID+`") { items { uid quantity } } }`, "")
+	var cartData struct {
+		Cart struct {
+			Items []struct {
+				UID      string  `json:"uid"`
+				Quantity float64 `json:"quantity"`
+			} `json:"items"`
+		} `json:"cart"`
+	}
+	json.Unmarshal(resp.Data, &cartData)
+	if len(cartData.Cart.Items) == 0 {
+		t.Fatal("no items in cart")
+	}
+	uid := cartData.Cart.Items[0].UID
+
+	// Update qty to 3
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		updateCartItems(input: { cart_id: "%s", cart_items: [{ cart_item_uid: "%s", quantity: 3 }] }) {
+			cart { total_quantity items { quantity } }
+		}
+	}`, cartID, uid), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("update items: %s", resp.Errors[0].Message)
+	}
+	var updateData struct {
+		UpdateCartItems struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct{ Quantity float64 } `json:"items"`
+			} `json:"cart"`
+		} `json:"updateCartItems"`
+	}
+	json.Unmarshal(resp.Data, &updateData)
+	if updateData.UpdateCartItems.Cart.TotalQuantity != 3 {
+		t.Errorf("expected total_quantity 3, got %v", updateData.UpdateCartItems.Cart.TotalQuantity)
+	}
+}
+
+func TestRemoveItemFromCart(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	// Get item UID
+	resp := doQuery(t, `{ cart(cart_id: "`+cartID+`") { items { uid } } }`, "")
+	var cartData struct {
+		Cart struct{ Items []struct{ UID string `json:"uid"` } `json:"items"` } `json:"cart"`
+	}
+	json.Unmarshal(resp.Data, &cartData)
+	uid := cartData.Cart.Items[0].UID
+
+	// Remove item
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		removeItemFromCart(input: { cart_id: "%s", cart_item_uid: "%s" }) {
+			cart { total_quantity items { uid } }
+		}
+	}`, cartID, uid), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("remove item: %s", resp.Errors[0].Message)
+	}
+	var removeData struct {
+		RemoveItemFromCart struct {
+			Cart struct {
+				TotalQuantity float64                     `json:"total_quantity"`
+				Items         []struct{ UID string } `json:"items"`
+			} `json:"cart"`
+		} `json:"removeItemFromCart"`
+	}
+	json.Unmarshal(resp.Data, &removeData)
+	if removeData.RemoveItemFromCart.Cart.TotalQuantity != 0 {
+		t.Errorf("expected total_quantity 0, got %v", removeData.RemoveItemFromCart.Cart.TotalQuantity)
+	}
+	if len(removeData.RemoveItemFromCart.Cart.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(removeData.RemoveItemFromCart.Cart.Items))
+	}
+}
+
+func TestSetShippingAddress(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setShippingAddressesOnCart(input: {
+			cart_id: "%s"
+			shipping_addresses: [{
+				address: {
+					firstname: "John", lastname: "Doe",
+					street: ["123 Test St"], city: "Austin",
+					region: "TX", region_id: 57, postcode: "78701",
+					country_code: "US", telephone: "5551234567"
+				}
+			}]
+		}) {
+			cart {
+				shipping_addresses {
+					firstname lastname city
+					region { code label region_id }
+					country { code }
+				}
+			}
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("set shipping: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		SetShippingAddressesOnCart struct {
+			Cart struct {
+				ShippingAddresses []struct {
+					Firstname string `json:"firstname"`
+					City      string `json:"city"`
+					Region    struct {
+						Code    string `json:"code"`
+						Label   string `json:"label"`
+						RegionID int   `json:"region_id"`
+					} `json:"region"`
+				} `json:"shipping_addresses"`
+			} `json:"cart"`
+		} `json:"setShippingAddressesOnCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+	addrs := data.SetShippingAddressesOnCart.Cart.ShippingAddresses
+	if len(addrs) != 1 {
+		t.Fatalf("expected 1 shipping address, got %d", len(addrs))
+	}
+	if addrs[0].Firstname != "John" {
+		t.Errorf("expected firstname John, got %s", addrs[0].Firstname)
+	}
+	if addrs[0].Region.Code != "TX" {
+		t.Errorf("expected region code TX, got %s", addrs[0].Region.Code)
+	}
+	if addrs[0].Region.Label != "Texas" {
+		t.Errorf("expected region label Texas, got %s", addrs[0].Region.Label)
+	}
+}
+
+func TestSetPaymentMethod(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setPaymentMethodOnCart(input: { cart_id: "%s", payment_method: { code: "checkmo" } }) {
+			cart { selected_payment_method { code } available_payment_methods { code title } }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("set payment: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		SetPaymentMethodOnCart struct {
+			Cart struct {
+				SelectedPaymentMethod struct{ Code string } `json:"selected_payment_method"`
+				AvailablePaymentMethods []struct{ Code, Title string } `json:"available_payment_methods"`
+			} `json:"cart"`
+		} `json:"setPaymentMethodOnCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+	if data.SetPaymentMethodOnCart.Cart.SelectedPaymentMethod.Code != "checkmo" {
+		t.Errorf("expected checkmo, got %s", data.SetPaymentMethodOnCart.Cart.SelectedPaymentMethod.Code)
+	}
+	if len(data.SetPaymentMethodOnCart.Cart.AvailablePaymentMethods) == 0 {
+		t.Error("expected at least 1 available payment method")
+	}
+}
+
+func TestSetInvalidPaymentMethod(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setPaymentMethodOnCart(input: { cart_id: "%s", payment_method: { code: "invalid_method" } }) {
+			cart { id }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected error for invalid payment method")
+	}
+	expected := "The requested Payment Method is not available."
+	if resp.Errors[0].Message != expected {
+		t.Errorf("error message mismatch:\n  got:    %q\n  expect: %q", resp.Errors[0].Message, expected)
+	}
+}
+
+func TestSetGuestEmail(t *testing.T) {
+	cartID := createTestCart(t)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setGuestEmailOnCart(input: { cart_id: "%s", email: "test@example.com" }) {
+			cart { email }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("set email: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		SetGuestEmailOnCart struct {
+			Cart struct{ Email string } `json:"cart"`
+		} `json:"setGuestEmailOnCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+	if data.SetGuestEmailOnCart.Cart.Email != "test@example.com" {
+		t.Errorf("expected test@example.com, got %s", data.SetGuestEmailOnCart.Cart.Email)
+	}
+}
+
+func TestApplyCoupon(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-UG06", 1) // Water bottle, $7
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		applyCouponToCart(input: { cart_id: "%s", coupon_code: "H20" }) {
+			cart {
+				applied_coupons { code }
+				prices {
+					subtotal_excluding_tax { value }
+					subtotal_with_discount_excluding_tax { value }
+					grand_total { value }
+					discounts { amount { value } label }
+				}
+			}
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("apply coupon: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		ApplyCouponToCart struct {
+			Cart struct {
+				AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+				Prices         struct {
+					SubtotalExcludingTax             struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					SubtotalWithDiscountExcludingTax struct{ Value float64 } `json:"subtotal_with_discount_excluding_tax"`
+					GrandTotal                       struct{ Value float64 } `json:"grand_total"`
+					Discounts                        []struct {
+						Amount struct{ Value float64 } `json:"amount"`
+						Label  string                  `json:"label"`
+					} `json:"discounts"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"applyCouponToCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	cart := data.ApplyCouponToCart.Cart
+	if len(cart.AppliedCoupons) != 1 || cart.AppliedCoupons[0].Code != "H20" {
+		t.Errorf("expected applied coupon H20, got %v", cart.AppliedCoupons)
+	}
+	if cart.Prices.SubtotalExcludingTax.Value != 7 {
+		t.Errorf("expected subtotal 7, got %v", cart.Prices.SubtotalExcludingTax.Value)
+	}
+	if cart.Prices.SubtotalWithDiscountExcludingTax.Value != 2.1 {
+		t.Errorf("expected subtotal_with_discount 2.1, got %v", cart.Prices.SubtotalWithDiscountExcludingTax.Value)
+	}
+	if cart.Prices.GrandTotal.Value != 2.1 {
+		t.Errorf("expected grand_total 2.1, got %v", cart.Prices.GrandTotal.Value)
+	}
+	if len(cart.Prices.Discounts) != 1 || cart.Prices.Discounts[0].Amount.Value != 4.9 {
+		t.Errorf("expected discount 4.9, got %v", cart.Prices.Discounts)
+	}
+}
+
+func TestApplyInvalidCoupon(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		applyCouponToCart(input: { cart_id: "%s", coupon_code: "INVALID999" }) {
+			cart { id }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected error for invalid coupon")
+	}
+	expected := "The coupon code isn't valid. Verify the code and try again."
+	if resp.Errors[0].Message != expected {
+		t.Errorf("error message mismatch:\n  got:    %q\n  expect: %q", resp.Errors[0].Message, expected)
+	}
+}
+
+func TestRemoveCoupon(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-UG06", 1)
+
+	// Apply coupon
+	doQuery(t, fmt.Sprintf(`mutation {
+		applyCouponToCart(input: { cart_id: "%s", coupon_code: "H20" }) { cart { id } }
+	}`, cartID), "")
+
+	// Remove coupon
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		removeCouponFromCart(input: { cart_id: "%s" }) {
+			cart {
+				applied_coupons { code }
+				prices { grand_total { value } discounts { amount { value } } }
+			}
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("remove coupon: %s", resp.Errors[0].Message)
+	}
+	var data struct {
+		RemoveCouponFromCart struct {
+			Cart struct {
+				AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+				Prices         struct {
+					GrandTotal struct{ Value float64 } `json:"grand_total"`
+					Discounts  []struct{ Amount struct{ Value float64 } } `json:"discounts"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"removeCouponFromCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+	if len(data.RemoveCouponFromCart.Cart.AppliedCoupons) != 0 {
+		t.Errorf("expected no coupons, got %v", data.RemoveCouponFromCart.Cart.AppliedCoupons)
+	}
+	if data.RemoveCouponFromCart.Cart.Prices.GrandTotal.Value != 7 {
+		t.Errorf("expected grand_total 7 after remove, got %v", data.RemoveCouponFromCart.Cart.Prices.GrandTotal.Value)
+	}
+}
+
+func TestDuplicateSkuMerge(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+	addTestProduct(t, cartID, "24-MB01", 2)
+
+	resp := doQuery(t, `{ cart(cart_id: "`+cartID+`") { total_quantity items { quantity product { sku } } } }`, "")
+	var data struct {
+		Cart struct {
+			TotalQuantity float64 `json:"total_quantity"`
+			Items         []struct {
+				Quantity float64 `json:"quantity"`
+			} `json:"items"`
+		} `json:"cart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+	if data.Cart.TotalQuantity != 3 {
+		t.Errorf("expected total_quantity 3 (merged), got %v", data.Cart.TotalQuantity)
+	}
+	if len(data.Cart.Items) != 1 {
+		t.Errorf("expected 1 item (merged), got %d", len(data.Cart.Items))
 	}
 }
