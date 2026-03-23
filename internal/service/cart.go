@@ -22,6 +22,7 @@ type CartService struct {
 	addressRepo  *repository.CartAddressRepository
 	shippingRepo *repository.ShippingRepository
 	paymentRepo  *repository.PaymentRepository
+	taxRepo      *repository.TaxRepository
 	cp           *config.ConfigProvider
 }
 
@@ -32,6 +33,7 @@ func NewCartService(
 	addressRepo *repository.CartAddressRepository,
 	shippingRepo *repository.ShippingRepository,
 	paymentRepo *repository.PaymentRepository,
+	taxRepo *repository.TaxRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	return &CartService{
@@ -41,6 +43,7 @@ func NewCartService(
 		addressRepo:  addressRepo,
 		shippingRepo: shippingRepo,
 		paymentRepo:  paymentRepo,
+		taxRepo:      taxRepo,
 		cp:           cp,
 	}
 }
@@ -265,8 +268,45 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) {
 		}
 	}
 
-	// Phase 1: grand_total = subtotal (tax and shipping added in later phases)
-	s.cartRepo.UpdateTotals(ctx, quoteID, subtotal, subtotal, len(items), itemsQty)
+	// Compute tax if shipping address exists
+	var totalTax float64
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+	for _, a := range addrs {
+		if a.AddressType == "shipping" && a.CountryID != "" {
+			regionID := 0
+			if a.RegionID != nil {
+				regionID = *a.RegionID
+			}
+			postcode := "*"
+			if a.Postcode != nil {
+				postcode = *a.Postcode
+			}
+
+			// Resolve product tax class IDs
+			for _, item := range items {
+				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
+			}
+
+			// Default customer tax class = 3 (Retail Customer)
+			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
+			for _, tr := range taxResults {
+				totalTax += tr.TaxAmount
+			}
+			break
+		}
+	}
+
+	// Get shipping amount from address
+	var shippingAmount float64
+	for _, a := range addrs {
+		if a.AddressType == "shipping" {
+			shippingAmount = a.ShippingAmount
+			break
+		}
+	}
+
+	grandTotal := subtotal + totalTax + shippingAmount
+	s.cartRepo.UpdateTotals(ctx, quoteID, subtotal, grandTotal, len(items), itemsQty)
 }
 
 // SetShippingAddresses sets the shipping address on the cart.
@@ -290,6 +330,7 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 		}
 	}
 
+	s.recalculateTotals(ctx, quoteID)
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -362,6 +403,7 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 		}
 	}
 
+	s.recalculateTotals(ctx, quoteID)
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -408,6 +450,40 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		cartItems = append(cartItems, s.mapCartItem(item, currency))
 	}
 
+	// Load addresses first (needed for tax calculation)
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, cart.EntityID)
+	storeID := middleware.GetStoreID(ctx)
+
+	// Compute tax for display
+	var totalTax float64
+	var appliedTaxes []*model.CartTaxItem
+	for _, a := range addrs {
+		if a.AddressType == "shipping" && a.CountryID != "" {
+			regionID := 0
+			if a.RegionID != nil {
+				regionID = *a.RegionID
+			}
+			postcode := "*"
+			if a.Postcode != nil {
+				postcode = *a.Postcode
+			}
+			for _, item := range items {
+				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
+			}
+			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
+			for _, tr := range taxResults {
+				totalTax += tr.TaxAmount
+				appliedTaxes = append(appliedTaxes, &model.CartTaxItem{
+					Amount: &model.Money{Value: &tr.TaxAmount, Currency: &currency},
+					Label:  tr.Label,
+				})
+			}
+			break
+		}
+	}
+
+	subtotalInclTax := cart.Subtotal + totalTax
+
 	result := &model.Cart{
 		ID:            maskedID,
 		Items:         cartItems,
@@ -415,16 +491,13 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		IsVirtual:     isVirtual,
 		Email:         cart.CustomerEmail,
 		Prices: &model.CartPrices{
-			GrandTotal:            &model.Money{Value: &cart.GrandTotal, Currency: &currency},
-			SubtotalExcludingTax:  &model.Money{Value: &cart.Subtotal, Currency: &currency},
-			SubtotalIncludingTax:  &model.Money{Value: &cart.Subtotal, Currency: &currency}, // Phase 1: no tax yet
+			GrandTotal:           &model.Money{Value: &cart.GrandTotal, Currency: &currency},
+			SubtotalExcludingTax: &model.Money{Value: &cart.Subtotal, Currency: &currency},
+			SubtotalIncludingTax: &model.Money{Value: &subtotalInclTax, Currency: &currency},
+			AppliedTaxes:         appliedTaxes,
 		},
 		ShippingAddresses: []*model.ShippingCartAddress{},
 	}
-
-	// Load addresses
-	addrs, _ := s.addressRepo.GetByQuoteID(ctx, cart.EntityID)
-	storeID := middleware.GetStoreID(ctx)
 	for _, a := range addrs {
 		switch a.AddressType {
 		case "shipping":

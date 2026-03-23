@@ -21,8 +21,9 @@ type CartItemData struct {
 	BaseRowTotal  float64
 	TaxPercent    float64
 	TaxAmount     float64
-	DiscountAmount float64
-	ParentItemID  *int
+	DiscountAmount     float64
+	ParentItemID       *int
+	ProductTaxClassID  int // resolved from catalog_product_entity_int
 }
 
 type CartItemRepository struct {
