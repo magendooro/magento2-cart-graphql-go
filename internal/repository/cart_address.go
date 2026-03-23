@@ -71,8 +71,17 @@ func (r *CartAddressRepository) GetByQuoteID(ctx context.Context, quoteID int) (
 }
 
 // SetAddress inserts or updates an address on the cart.
+// When regionID is provided, resolves the full region name from directory_country_region.
 func (r *CartAddressRepository) SetAddress(ctx context.Context, quoteID int, addressType string, firstname, lastname, city, countryID string, street []string, company, region, postcode, telephone *string, regionID *int) (int, error) {
 	streetStr := strings.Join(street, "\n")
+
+	// Resolve region name from regionID (Magento stores full name, not code)
+	if regionID != nil && *regionID > 0 {
+		_, name, err := r.ResolveRegion(ctx, *regionID)
+		if err == nil {
+			region = &name
+		}
+	}
 
 	// Check if address of this type already exists
 	var existingID int

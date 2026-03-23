@@ -124,11 +124,20 @@ func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regi
 }
 
 // GetProductTaxClassID returns the tax_class_id for a product.
+// Falls back to eav_attribute.default_value when no explicit value is stored.
 func (r *TaxRepository) GetProductTaxClassID(ctx context.Context, productID int) int {
 	var taxClassID int
-	r.db.QueryRowContext(ctx,
-		"SELECT COALESCE(value, 0) FROM catalog_product_entity_int WHERE entity_id = ? AND attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'tax_class_id' AND entity_type_id = 4) AND store_id = 0",
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(cpei.value, ea.default_value, 0)
+		FROM eav_attribute ea
+		LEFT JOIN catalog_product_entity_int cpei
+			ON cpei.attribute_id = ea.attribute_id
+			AND cpei.entity_id = ? AND cpei.store_id = 0
+		WHERE ea.attribute_code = 'tax_class_id' AND ea.entity_type_id = 4`,
 		productID,
 	).Scan(&taxClassID)
+	if err != nil {
+		return 0
+	}
 	return taxClassID
 }

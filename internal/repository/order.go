@@ -83,43 +83,67 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 		customerLastname = billingAddr.Lastname
 	}
 
+	subtotalInclTax := cart.Subtotal + taxAmount
+	shippingInclTax := shippingAmount // no tax on shipping yet
+	customerGroupID := 0             // guest default
+
 	// 2. Insert sales_order
 	orderResult, err := tx.ExecContext(ctx, `
 		INSERT INTO sales_order (
-			state, status, store_id, customer_id, customer_is_guest, customer_email,
-			customer_firstname, customer_lastname,
+			state, status, store_id, store_name,
+			customer_id, customer_is_guest, customer_group_id, customer_email,
+			customer_firstname, customer_lastname, customer_note_notify,
 			increment_id, quote_id, coupon_code, applied_rule_ids,
 			is_virtual, shipping_method, shipping_description,
 			base_grand_total, grand_total, base_subtotal, subtotal,
+			subtotal_incl_tax, base_subtotal_incl_tax,
 			base_tax_amount, tax_amount,
 			base_shipping_amount, shipping_amount,
+			shipping_incl_tax, base_shipping_incl_tax,
+			base_shipping_tax_amount, shipping_tax_amount,
 			base_discount_amount, discount_amount,
+			base_shipping_discount_amount, shipping_discount_amount,
+			discount_tax_compensation_amount, base_discount_tax_compensation_amount,
+			shipping_discount_tax_compensation_amount, base_shipping_discount_tax_compensation_amnt,
 			total_qty_ordered, total_item_count,
+			base_total_due, total_due, weight,
 			base_currency_code, order_currency_code, global_currency_code, store_currency_code,
 			base_to_global_rate, base_to_order_rate, store_to_base_rate, store_to_order_rate,
 			protect_code, send_email, created_at, updated_at
 		) VALUES (
-			'new', 'pending', ?, ?, ?, ?,
-			?, ?,
+			'new', 'pending', ?, 'Main Website\nMain Website Store\nDefault Store View',
+			?, ?, ?, ?,
+			?, ?, 1,
 			?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?, ?,
 			?, ?,
 			?, ?,
+			?, ?,
+			?, ?,
+			0, 0,
+			0, 0,
+			0, 0,
+			0, 0,
 			0, 0,
 			?, ?,
+			?, ?, 0,
 			?, ?, 'USD', 'USD',
-			1, 1, 1, 1,
+			1, 1, 0, 0,
 			?, 1, NOW(), NOW()
 		)`,
-		cart.StoreID, cart.CustomerID, cart.CustomerIsGuest, email,
+		cart.StoreID,
+		cart.CustomerID, cart.CustomerIsGuest, customerGroupID, email,
 		customerFirstname, customerLastname,
-		incrementID, cart.EntityID, cart.CouponCode, nil,
+		incrementID, cart.EntityID, cart.CouponCode, cart.CouponCode,
 		cart.IsVirtual, shippingMethod, shippingDescription,
 		cart.GrandTotal, cart.GrandTotal, cart.Subtotal, cart.Subtotal,
+		subtotalInclTax, subtotalInclTax,
 		taxAmount, taxAmount,
 		shippingAmount, shippingAmount,
+		shippingInclTax, shippingInclTax,
 		totalQty, totalItemCount,
+		cart.GrandTotal, cart.GrandTotal,
 		cart.BaseCurrencyCode, cart.QuoteCurrencyCode,
 		protectCode,
 	)
@@ -130,28 +154,39 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 
 	// 3. Insert sales_order_item
 	for _, item := range items {
+		priceInclTax := item.Price + item.TaxAmount/item.Qty
+		rowTotalInclTax := item.RowTotal + item.TaxAmount
+
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO sales_order_item (
 				order_id, parent_item_id, quote_item_id,
 				product_id, product_type, sku, name,
 				qty_ordered, price, base_price, original_price, base_original_price,
+				price_incl_tax, base_price_incl_tax,
 				row_total, base_row_total,
+				row_total_incl_tax, base_row_total_incl_tax,
 				tax_percent, tax_amount, base_tax_amount,
 				discount_percent, discount_amount, base_discount_amount,
+				discount_tax_compensation_amount, base_discount_tax_compensation_amount,
 				is_virtual, store_id, created_at, updated_at
 			) VALUES (
 				?, NULL, ?,
 				?, ?, ?, ?,
 				?, ?, ?, ?, ?,
 				?, ?,
+				?, ?,
+				?, ?,
 				?, ?, ?,
 				0, 0, 0,
+				0, 0,
 				0, ?, NOW(), NOW()
 			)`,
 			orderID, item.ItemID,
 			item.ProductID, item.ProductType, item.SKU, item.Name,
 			item.Qty, item.Price, item.Price, item.Price, item.Price,
+			priceInclTax, priceInclTax,
 			item.RowTotal, item.RowTotal,
+			rowTotalInclTax, rowTotalInclTax,
 			item.TaxPercent, item.TaxAmount, item.TaxAmount,
 			cart.StoreID,
 		)
@@ -160,75 +195,97 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 		}
 	}
 
-	// 4. Insert sales_order_address (billing + shipping)
+	// 4. Insert sales_order_address (billing + shipping) and collect IDs
+	var billingAddrID, shippingAddrID int64
 	for _, addr := range []*CartAddressData{billingAddr, shippingAddr} {
 		if addr == nil {
 			continue
 		}
-		_, err := tx.ExecContext(ctx, `
+		addrResult, err := tx.ExecContext(ctx, `
 			INSERT INTO sales_order_address (
-				parent_id, address_type, email,
+				parent_id, address_type, quote_address_id, customer_id, email,
 				firstname, lastname, company, street, city,
 				region, region_id, postcode, country_id, telephone
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			orderID, addr.AddressType, email,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			orderID, addr.AddressType, addr.AddressID, cart.CustomerID, email,
 			addr.Firstname, addr.Lastname, addr.Company, addr.Street, addr.City,
 			addr.Region, addr.RegionID, addr.Postcode, addr.CountryID, addr.Telephone,
 		)
 		if err != nil {
 			return "", fmt.Errorf("insert order address (%s): %w", addr.AddressType, err)
 		}
+		addrID, _ := addrResult.LastInsertId()
+		if addr.AddressType == "billing" {
+			billingAddrID = addrID
+		} else {
+			shippingAddrID = addrID
+		}
+	}
+
+	// Backfill address IDs on sales_order
+	_, err = tx.ExecContext(ctx,
+		"UPDATE sales_order SET billing_address_id = ?, shipping_address_id = ? WHERE entity_id = ?",
+		billingAddrID, shippingAddrID, orderID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("update order address ids: %w", err)
 	}
 
 	// 5. Insert sales_order_payment
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO sales_order_payment (
 			parent_id, method, amount_ordered, base_amount_ordered,
-			shipping_amount, base_shipping_amount
-		) VALUES (?, ?, ?, ?, ?, ?)`,
+			shipping_amount, base_shipping_amount,
+			additional_information
+		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		orderID, paymentMethod, cart.GrandTotal, cart.GrandTotal,
 		shippingAmount, shippingAmount,
+		fmt.Sprintf(`{"method_title":"%s"}`, paymentMethod),
 	)
 	if err != nil {
 		return "", fmt.Errorf("insert order payment: %w", err)
 	}
 
 	// 6. Insert sales_order_grid
-	billingName := customerFirstname + " " + customerLastname
+	customerName := customerFirstname + " " + customerLastname
 	billingAddrStr := ""
 	shippingAddrStr := ""
 	if billingAddr != nil {
-		billingAddrStr = formatAddressString(billingAddr)
+		billingAddrStr = formatGridAddressString(billingAddr)
 	}
 	if shippingAddr != nil {
-		shippingAddrStr = formatAddressString(shippingAddr)
+		shippingAddrStr = formatGridAddressString(shippingAddr)
 	}
 
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO sales_order_grid (
 			entity_id, increment_id, status, store_id, store_name,
-			customer_id, customer_email, customer_group,
+			customer_id, customer_email, customer_group, customer_name,
 			billing_name, shipping_name,
 			billing_address, shipping_address,
 			shipping_information, payment_method,
 			base_grand_total, grand_total,
-			total_refunded,
+			subtotal, shipping_and_handling,
+			base_currency_code, order_currency_code,
 			created_at, updated_at
 		) VALUES (?, ?, 'pending', ?, 'Main Website\nMain Website Store\nDefault Store View',
-			?, ?, 0,
+			?, ?, 0, ?,
 			?, ?,
 			?, ?,
 			?, ?,
 			?, ?,
-			0,
+			?, ?,
+			?, ?,
 			NOW(), NOW()
 		)`,
 		orderID, incrementID, cart.StoreID,
-		cart.CustomerID, email,
-		billingName, billingName,
+		cart.CustomerID, email, customerName,
+		customerName, customerName,
 		billingAddrStr, shippingAddrStr,
 		shippingDescription, paymentMethod,
 		cart.GrandTotal, cart.GrandTotal,
+		cart.Subtotal, shippingAmount,
+		cart.BaseCurrencyCode, cart.QuoteCurrencyCode,
 	)
 	if err != nil {
 		return "", fmt.Errorf("insert order grid: %w", err)
@@ -266,8 +323,9 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 	return incrementID, nil
 }
 
-func formatAddressString(a *CartAddressData) string {
-	parts := []string{a.Firstname + " " + a.Lastname}
+// formatGridAddressString matches Magento's grid address format (no name, no country, comma-separated).
+func formatGridAddressString(a *CartAddressData) string {
+	var parts []string
 	if a.Street != "" {
 		parts = append(parts, strings.Replace(a.Street, "\n", ", ", -1))
 	}
@@ -278,8 +336,7 @@ func formatAddressString(a *CartAddressData) string {
 	if a.Postcode != nil {
 		parts = append(parts, *a.Postcode)
 	}
-	parts = append(parts, a.CountryID)
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, ",")
 }
 
 func generateProtectCode() string {

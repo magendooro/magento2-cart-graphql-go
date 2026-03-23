@@ -33,7 +33,7 @@ func (r *ShippingRepository) GetAvailableRates(ctx context.Context, storeID int,
 
 	// Tablerate carrier
 	if r.cp.GetBool("carriers/tablerate/active", storeID) {
-		tr, err := r.getTablerateRates(ctx, countryID, regionID, postcode, subtotal)
+		tr, err := r.getTablerateRates(ctx, storeID, countryID, regionID, postcode, subtotal)
 		if err == nil && tr != nil {
 			rates = append(rates, tr)
 		}
@@ -85,9 +85,11 @@ func (r *ShippingRepository) GetAvailableRates(ctx context.Context, storeID int,
 	return rates, nil
 }
 
-func (r *ShippingRepository) getTablerateRates(ctx context.Context, countryID string, regionID *int, postcode *string, subtotal float64) (*ShippingRate, error) {
+func (r *ShippingRepository) getTablerateRates(ctx context.Context, storeID int, countryID string, regionID *int, postcode *string, subtotal float64) (*ShippingRate, error) {
 	// Tablerate lookup: find the best matching rate
-	// Magento matches by (country, region, postcode, condition_value) with fallback
+	// Magento matches by (website, country, region, postcode, condition_value) with fallback
+	websiteID := r.cp.GetWebsiteID(storeID)
+
 	var price float64
 	rid := 0
 	if regionID != nil {
@@ -100,10 +102,10 @@ func (r *ShippingRepository) getTablerateRates(ctx context.Context, countryID st
 
 	// Try exact match first, then fallback to wildcard
 	queries := []string{
-		"SELECT cost FROM shipping_tablerate WHERE dest_country_id = ? AND dest_region_id = ? AND dest_zip = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-		"SELECT cost FROM shipping_tablerate WHERE dest_country_id = ? AND dest_region_id = ? AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-		"SELECT cost FROM shipping_tablerate WHERE dest_country_id = ? AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-		"SELECT cost FROM shipping_tablerate WHERE dest_country_id = '0' AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+		"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+		"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+		"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+		"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = '0' AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
 	}
 
 	found := false
@@ -111,13 +113,13 @@ func (r *ShippingRepository) getTablerateRates(ctx context.Context, countryID st
 		var err error
 		switch i {
 		case 0:
-			err = r.db.QueryRowContext(ctx, q, countryID, rid, pc, subtotal).Scan(&price)
+			err = r.db.QueryRowContext(ctx, q, websiteID, countryID, rid, pc, subtotal).Scan(&price)
 		case 1:
-			err = r.db.QueryRowContext(ctx, q, countryID, rid, subtotal).Scan(&price)
+			err = r.db.QueryRowContext(ctx, q, websiteID, countryID, rid, subtotal).Scan(&price)
 		case 2:
-			err = r.db.QueryRowContext(ctx, q, countryID, subtotal).Scan(&price)
+			err = r.db.QueryRowContext(ctx, q, websiteID, countryID, subtotal).Scan(&price)
 		case 3:
-			err = r.db.QueryRowContext(ctx, q, subtotal).Scan(&price)
+			err = r.db.QueryRowContext(ctx, q, websiteID, subtotal).Scan(&price)
 		}
 		if err == nil {
 			found = true

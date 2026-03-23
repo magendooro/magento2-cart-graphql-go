@@ -442,7 +442,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 		if a.AddressType == "shipping" {
 			hasShipping = true
 			if a.ShippingMethod == nil || *a.ShippingMethod == "" {
-				return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+				return "", fmt.Errorf("The shipping method is missing. Select the shipping method and try again.")
 			}
 		}
 		if a.AddressType == "billing" {
@@ -451,22 +451,22 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 	}
 
 	if cart.IsVirtual != 1 && !hasShipping {
-		return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+		return "", fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
 	}
 	if !hasBilling {
-		return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+		return "", fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
 	}
 
 	// Validate payment
 	selectedPayment, err := s.paymentRepo.GetSelectedMethod(ctx, quoteID)
 	if err != nil || selectedPayment.Code == "" {
-		return "", fmt.Errorf("Unable to place order: Enter a valid payment method and try again.")
+		return "", fmt.Errorf("Enter a valid payment method and try again.")
 	}
 
 	// Validate guest email
 	if cart.CustomerID == nil || *cart.CustomerID == 0 {
 		if cart.CustomerEmail == nil || *cart.CustomerEmail == "" {
-			return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+			return "", fmt.Errorf("Guest email for cart is missing.")
 		}
 	}
 
