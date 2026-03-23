@@ -13,6 +13,7 @@ import (
 	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/totals"
 )
 
 type CartService struct {
@@ -24,6 +25,7 @@ type CartService struct {
 	paymentRepo  *repository.PaymentRepository
 	taxRepo      *repository.TaxRepository
 	orderRepo    *repository.OrderRepository
+	pipeline     *totals.Pipeline
 	cp           *config.ConfigProvider
 }
 
@@ -38,6 +40,16 @@ func NewCartService(
 	orderRepo *repository.OrderRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
+	// Build totals pipeline (order matches Magento's sales.xml sort_order)
+	pipeline := totals.NewPipeline(
+		&totals.SubtotalCollector{},            // 100
+		// &totals.DiscountCollector{},          // 300 — Phase 2 (#10)
+		&totals.ShippingCollector{},             // 350
+		// &totals.ShippingTaxCollector{},       // 375 — Phase 3 (#21)
+		&totals.TaxCollector{TaxRepo: taxRepo},  // 450
+		&totals.GrandTotalCollector{},           // 550
+	)
+
 	return &CartService{
 		cartRepo:     cartRepo,
 		maskRepo:     maskRepo,
@@ -47,6 +59,7 @@ func NewCartService(
 		paymentRepo:  paymentRepo,
 		taxRepo:      taxRepo,
 		orderRepo:    orderRepo,
+		pipeline:     pipeline,
 		cp:           cp,
 	}
 }
@@ -201,7 +214,9 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 	}
 
 	// Recalculate totals
-	s.recalculateTotals(ctx, quoteID)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
 
 	cart, _ := s.GetCart(ctx, maskedID)
 	return &model.AddProductsToCartOutput{
@@ -226,7 +241,9 @@ func (s *CartService) UpdateItems(ctx context.Context, maskedID string, items []
 		}
 	}
 
-	s.recalculateTotals(ctx, quoteID)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -241,7 +258,9 @@ func (s *CartService) RemoveItem(ctx context.Context, maskedID string, itemUID s
 	itemID, _ := decodeUID(itemUID)
 	s.itemRepo.Remove(ctx, itemID)
 
-	s.recalculateTotals(ctx, quoteID)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -255,61 +274,68 @@ func (s *CartService) SetGuestEmail(ctx context.Context, maskedID, email string)
 	return s.GetCart(ctx, maskedID)
 }
 
-// recalculateTotals recomputes subtotal and updates the quote.
-func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) {
-	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
+// recalculateTotals runs the totals pipeline and updates the quote.
+func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error {
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
 	if err != nil {
-		return
+		return err
 	}
 
-	var subtotal float64
+	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	if err != nil {
+		return err
+	}
+
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+
+	// Find shipping address for pipeline context
+	var shippingAddr *repository.CartAddressData
+	for _, a := range addrs {
+		if a.AddressType == "shipping" {
+			shippingAddr = a
+			break
+		}
+	}
+
+	// Run totals pipeline
+	cc := &totals.CollectorContext{
+		Quote:   cart,
+		Items:   items,
+		Address: shippingAddr,
+		StoreID: cart.StoreID,
+	}
+	total, err := s.pipeline.Collect(ctx, cc)
+	if err != nil {
+		return fmt.Errorf("totals pipeline: %w", err)
+	}
+
 	var itemsQty float64
 	for _, item := range items {
-		if item.ParentItemID == nil { // only count top-level items
-			subtotal += item.RowTotal
+		if item.ParentItemID == nil {
 			itemsQty += item.Qty
 		}
 	}
 
-	// Compute tax if shipping address exists
-	var totalTax float64
-	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
-	for _, a := range addrs {
-		if a.AddressType == "shipping" && a.CountryID != "" {
-			regionID := 0
-			if a.RegionID != nil {
-				regionID = *a.RegionID
-			}
-			postcode := "*"
-			if a.Postcode != nil {
-				postcode = *a.Postcode
-			}
+	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, len(items), itemsQty)
+}
 
-			// Resolve product tax class IDs
-			for _, item := range items {
-				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
-			}
-
-			// Default customer tax class = 3 (Retail Customer)
-			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
-			for _, tr := range taxResults {
-				totalTax += tr.TaxAmount
-			}
-			break
-		}
-	}
-
-	// Get shipping amount from address
-	var shippingAmount float64
+// collectTotals runs the pipeline without persisting — used for display and order placement.
+func (s *CartService) collectTotals(ctx context.Context, cart *repository.CartData, items []*repository.CartItemData, addrs []*repository.CartAddressData) (*totals.Total, error) {
+	var shippingAddr *repository.CartAddressData
 	for _, a := range addrs {
 		if a.AddressType == "shipping" {
-			shippingAmount = a.ShippingAmount
+			shippingAddr = a
 			break
 		}
 	}
 
-	grandTotal := subtotal + totalTax + shippingAmount
-	s.cartRepo.UpdateTotals(ctx, quoteID, subtotal, grandTotal, len(items), itemsQty)
+	cc := &totals.CollectorContext{
+		Quote:   cart,
+		Items:   items,
+		Address: shippingAddr,
+		StoreID: cart.StoreID,
+	}
+	return s.pipeline.Collect(ctx, cc)
 }
 
 // SetShippingAddresses sets the shipping address on the cart.
@@ -333,7 +359,9 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 		}
 	}
 
-	s.recalculateTotals(ctx, quoteID)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -406,7 +434,9 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 		}
 	}
 
-	s.recalculateTotals(ctx, quoteID)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -470,27 +500,14 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 		}
 	}
 
-	// Compute tax for the order
+	// Compute totals for the order using the same pipeline as cart display
+	orderTotals, err := s.collectTotals(ctx, cart, items, addrs)
+	if err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals collection for order failed")
+	}
 	var totalTax float64
-	for _, a := range addrs {
-		if a.AddressType == "shipping" && a.CountryID != "" {
-			regionID := 0
-			if a.RegionID != nil {
-				regionID = *a.RegionID
-			}
-			postcode := "*"
-			if a.Postcode != nil {
-				postcode = *a.Postcode
-			}
-			for _, item := range items {
-				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
-			}
-			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
-			for _, tr := range taxResults {
-				totalTax += tr.TaxAmount
-			}
-			break
-		}
+	if orderTotals != nil {
+		totalTax = orderTotals.TaxAmount
 	}
 
 	incrementID, err := s.orderRepo.PlaceOrder(ctx, cart, items, addrs, selectedPayment.Code, totalTax)
@@ -546,35 +563,22 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		cartItems = append(cartItems, s.mapCartItem(item, currency))
 	}
 
-	// Load addresses first (needed for tax calculation)
+	// Load addresses
 	addrs, _ := s.addressRepo.GetByQuoteID(ctx, cart.EntityID)
 	storeID := middleware.GetStoreID(ctx)
 
-	// Compute tax for display
+	// Compute totals via pipeline (single source of truth for tax/totals)
+	displayTotals, _ := s.collectTotals(ctx, cart, items, addrs)
 	var totalTax float64
 	var appliedTaxes []*model.CartTaxItem
-	for _, a := range addrs {
-		if a.AddressType == "shipping" && a.CountryID != "" {
-			regionID := 0
-			if a.RegionID != nil {
-				regionID = *a.RegionID
-			}
-			postcode := "*"
-			if a.Postcode != nil {
-				postcode = *a.Postcode
-			}
-			for _, item := range items {
-				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
-			}
-			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
-			for _, tr := range taxResults {
-				totalTax += tr.TaxAmount
-				appliedTaxes = append(appliedTaxes, &model.CartTaxItem{
-					Amount: &model.Money{Value: &tr.TaxAmount, Currency: &currency},
-					Label:  tr.Label,
-				})
-			}
-			break
+	if displayTotals != nil {
+		totalTax = displayTotals.TaxAmount
+		for _, at := range displayTotals.AppliedTaxes {
+			amt := at.Amount
+			appliedTaxes = append(appliedTaxes, &model.CartTaxItem{
+				Amount: &model.Money{Value: &amt, Currency: &currency},
+				Label:  at.Label,
+			})
 		}
 	}
 
