@@ -27,7 +27,8 @@ func NewShippingRepository(db *sql.DB, cp *config.ConfigProvider) *ShippingRepos
 }
 
 // GetAvailableRates returns shipping rates for the given address and cart subtotal.
-func (r *ShippingRepository) GetAvailableRates(ctx context.Context, storeID int, countryID string, regionID *int, postcode *string, subtotal float64) ([]*ShippingRate, error) {
+// itemQty is needed for per-item flatrate calculation.
+func (r *ShippingRepository) GetAvailableRates(ctx context.Context, storeID int, countryID string, regionID *int, postcode *string, subtotal float64, itemQty float64) ([]*ShippingRate, error) {
 	var rates []*ShippingRate
 
 	// Tablerate carrier
@@ -38,9 +39,18 @@ func (r *ShippingRepository) GetAvailableRates(ctx context.Context, storeID int,
 		}
 	}
 
-	// Flatrate carrier
-	if r.cp.GetBool("carriers/flatrate/active", storeID) {
-		price := r.cp.GetFloat("carriers/flatrate/price", storeID, 5.0)
+	// Flatrate carrier (active by default in Magento when not explicitly configured)
+	if r.cp.GetInt("carriers/flatrate/active", storeID, 1) == 1 {
+		unitPrice := r.cp.GetFloat("carriers/flatrate/price", storeID, 5.0)
+		// Magento default type is "I" (per-item). "O" = per-order.
+		flatrateType := r.cp.Get("carriers/flatrate/type", storeID)
+		if flatrateType == "" {
+			flatrateType = "I" // default: per-item
+		}
+		price := unitPrice
+		if flatrateType == "I" && itemQty > 0 {
+			price = unitPrice * itemQty
+		}
 		title := r.cp.Get("carriers/flatrate/title", storeID)
 		if title == "" {
 			title = "Flat Rate"

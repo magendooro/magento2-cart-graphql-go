@@ -212,7 +212,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 			billing_address, shipping_address,
 			shipping_information, payment_method,
 			base_grand_total, grand_total,
-			total_refunded, base_total_refunded,
+			total_refunded,
 			created_at, updated_at
 		) VALUES (?, ?, 'pending', ?, 'Main Website\nMain Website Store\nDefault Store View',
 			?, ?, 0,
@@ -220,7 +220,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 			?, ?,
 			?, ?,
 			?, ?,
-			0, 0,
+			0,
 			NOW(), NOW()
 		)`,
 		orderID, incrementID, cart.StoreID,

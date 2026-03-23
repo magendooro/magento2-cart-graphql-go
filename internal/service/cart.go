@@ -387,7 +387,7 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 			if a.AddressType == "shipping" {
 				// Validate carrier/method
 				storeID := middleware.GetStoreID(ctx)
-				rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal)
+				rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal, cart.ItemsQty)
 				var selectedRate *repository.ShippingRate
 				for _, r := range rates {
 					if r.CarrierCode == method.CarrierCode && r.MethodCode == method.MethodCode {
@@ -599,7 +599,7 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		case "shipping":
 			sa := s.mapShippingAddress(ctx, a)
 			// Load available shipping methods
-			rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal)
+			rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal, cart.ItemsQty)
 			for _, r := range rates {
 				available := true
 				sa.AvailableShippingMethods = append(sa.AvailableShippingMethods, &model.AvailableShippingMethod{
