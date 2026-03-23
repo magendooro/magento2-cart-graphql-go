@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1: Complete. Phase 2: 1/5 done (coupon codes).** 19 tests passing (16 integration + 3 comparison). Architecture refactored with totals pipeline, carrier registry, error constants.
+**Phase 1: Complete. Phase 2: 2/5 done (coupons + configurable products).** 21 tests passing (17 integration + 4 comparison). Architecture: totals pipeline, carrier registry, error constants.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
@@ -103,9 +103,9 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 
 ### Supported
 - Simple products: add, update qty, remove, price, stock check
+- Configurable products: selected_options decoding, parent+child quote_items, ConfigurableCartItem response
 
 ### Not yet
-- Configurable: need selected_options decoding, parent+child quote_items — #11
 - Bundle: need bundle option parsing, dynamic pricing — #12
 - Virtual/Downloadable: need is_virtual cart detection, no shipping — #23
 - Grouped: add children as individual simple items — #24

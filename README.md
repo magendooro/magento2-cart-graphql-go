@@ -57,7 +57,7 @@ Default port: **8084**.
 | EU VAT | 🔲 Phase 3a | Country-level, VAT ID, reverse charge |
 | Tax-inclusive pricing | 🔲 Phase 3b | Catalog prices include tax |
 | Tax on shipping | 🔲 Phase 3c | Shipping tax class |
-| Configurable products | 🔲 Phase 2b | selected_options decoding |
+| Configurable products | ✅ | selected_options → parent+child items, ConfigurableCartItem |
 | Bundle products | 🔲 Phase 2c | Bundle option selections |
 
 ## Configuration
