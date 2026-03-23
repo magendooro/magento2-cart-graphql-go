@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -18,6 +19,7 @@ type CartService struct {
 	cartRepo     *repository.CartRepository
 	maskRepo     *repository.CartMaskRepository
 	itemRepo     *repository.CartItemRepository
+	addressRepo  *repository.CartAddressRepository
 	cp           *config.ConfigProvider
 }
 
@@ -25,13 +27,15 @@ func NewCartService(
 	cartRepo *repository.CartRepository,
 	maskRepo *repository.CartMaskRepository,
 	itemRepo *repository.CartItemRepository,
+	addressRepo *repository.CartAddressRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	return &CartService{
-		cartRepo: cartRepo,
-		maskRepo: maskRepo,
-		itemRepo: itemRepo,
-		cp:       cp,
+		cartRepo:    cartRepo,
+		maskRepo:    maskRepo,
+		itemRepo:    itemRepo,
+		addressRepo: addressRepo,
+		cp:          cp,
 	}
 }
 
@@ -259,6 +263,64 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) {
 	s.cartRepo.UpdateTotals(ctx, quoteID, subtotal, subtotal, len(items), itemsQty)
 }
 
+// SetShippingAddresses sets the shipping address on the cart.
+func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string, addresses []*model.ShippingAddressInput) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+
+	for _, addr := range addresses {
+		if addr.Address == nil {
+			continue
+		}
+		a := addr.Address
+		_, err := s.addressRepo.SetAddress(ctx, quoteID, "shipping",
+			a.Firstname, a.Lastname, a.City, a.CountryCode, a.Street,
+			a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set shipping address: %w", err)
+		}
+	}
+
+	return s.GetCart(ctx, maskedID)
+}
+
+// SetBillingAddress sets the billing address on the cart.
+func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, input *model.BillingAddressInput) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+
+	if input.SameAsShipping != nil && *input.SameAsShipping {
+		// Copy shipping address as billing
+		addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+		for _, a := range addrs {
+			if a.AddressType == "shipping" {
+				street := strings.Split(a.Street, "\n")
+				s.addressRepo.SetAddress(ctx, quoteID, "billing",
+					a.Firstname, a.Lastname, a.City, a.CountryID, street,
+					a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
+				)
+				break
+			}
+		}
+	} else if input.Address != nil {
+		a := input.Address
+		_, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
+			a.Firstname, a.Lastname, a.City, a.CountryCode, a.Street,
+			a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set billing address: %w", err)
+		}
+	}
+
+	return s.GetCart(ctx, maskedID)
+}
+
 // ── Mapping ─────────────────────────────────────────────────────────────────
 
 func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, maskedID string) (*model.Cart, error) {
@@ -290,11 +352,80 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		ShippingAddresses: []*model.ShippingCartAddress{},
 	}
 
+	// Load addresses
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, cart.EntityID)
+	for _, a := range addrs {
+		switch a.AddressType {
+		case "shipping":
+			result.ShippingAddresses = append(result.ShippingAddresses, s.mapShippingAddress(ctx, a))
+		case "billing":
+			result.BillingAddress = s.mapBillingAddress(ctx, a)
+		}
+	}
+
 	if cart.CouponCode != nil {
 		result.AppliedCoupons = []*model.AppliedCoupon{{Code: *cart.CouponCode}}
 	}
 
 	return result, nil
+}
+
+func (s *CartService) mapShippingAddress(ctx context.Context, a *repository.CartAddressData) *model.ShippingCartAddress {
+	addr := &model.ShippingCartAddress{
+		Firstname: a.Firstname,
+		Lastname:  a.Lastname,
+		Street:    toStringPtrs(strings.Split(a.Street, "\n")),
+		City:      a.City,
+		Postcode:  a.Postcode,
+		Company:   a.Company,
+		Telephone: a.Telephone,
+		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: a.CountryID},
+	}
+	if a.RegionID != nil {
+		code, name, err := s.addressRepo.ResolveRegion(ctx, *a.RegionID)
+		if err == nil {
+			addr.Region = &model.CartAddressRegion{Code: &code, Label: &name, RegionID: a.RegionID}
+		}
+	} else if a.Region != nil {
+		addr.Region = &model.CartAddressRegion{Label: a.Region}
+	}
+	if a.ShippingMethod != nil {
+		parts := strings.SplitN(*a.ShippingMethod, "_", 2)
+		if len(parts) == 2 {
+			desc := ""
+			if a.ShippingDescription != nil {
+				desc = *a.ShippingDescription
+			}
+			addr.SelectedShippingMethod = &model.SelectedShippingMethod{
+				CarrierCode:  parts[0],
+				CarrierTitle: parts[0],
+				MethodCode:   parts[1],
+				MethodTitle:  desc,
+				Amount:       &model.Money{Value: &a.ShippingAmount, Currency: nil},
+			}
+		}
+	}
+	return addr
+}
+
+func (s *CartService) mapBillingAddress(ctx context.Context, a *repository.CartAddressData) *model.BillingCartAddress {
+	addr := &model.BillingCartAddress{
+		Firstname: a.Firstname,
+		Lastname:  a.Lastname,
+		Street:    toStringPtrs(strings.Split(a.Street, "\n")),
+		City:      a.City,
+		Postcode:  a.Postcode,
+		Company:   a.Company,
+		Telephone: a.Telephone,
+		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: a.CountryID},
+	}
+	if a.RegionID != nil {
+		code, name, err := s.addressRepo.ResolveRegion(ctx, *a.RegionID)
+		if err == nil {
+			addr.Region = &model.CartAddressRegion{Code: &code, Label: &name, RegionID: a.RegionID}
+		}
+	}
+	return addr
 }
 
 func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {
@@ -324,4 +455,12 @@ func decodeUID(uid string) (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(string(decoded))
+}
+
+func toStringPtrs(ss []string) []*string {
+	result := make([]*string, len(ss))
+	for i := range ss {
+		result[i] = &ss[i]
+	}
+	return result
 }
