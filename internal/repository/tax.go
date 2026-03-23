@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 )
 
 // TaxRate holds a matched tax rate for an address.
@@ -123,21 +124,68 @@ func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regi
 	return results, nil
 }
 
-// GetProductTaxClassID returns the tax_class_id for a product.
+// GetProductTaxClassID returns the tax_class_id for a single product.
 // Falls back to eav_attribute.default_value when no explicit value is stored.
 func (r *TaxRepository) GetProductTaxClassID(ctx context.Context, productID int) int {
-	var taxClassID int
-	err := r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(cpei.value, ea.default_value, 0)
-		FROM eav_attribute ea
-		LEFT JOIN catalog_product_entity_int cpei
-			ON cpei.attribute_id = ea.attribute_id
-			AND cpei.entity_id = ? AND cpei.store_id = 0
-		WHERE ea.attribute_code = 'tax_class_id' AND ea.entity_type_id = 4`,
-		productID,
-	).Scan(&taxClassID)
+	result, err := r.GetProductTaxClassIDs(ctx, []int{productID})
 	if err != nil {
 		return 0
 	}
-	return taxClassID
+	return result[productID]
+}
+
+// GetProductTaxClassIDs batch-loads tax_class_id for multiple products in a single query.
+// Falls back to eav_attribute.default_value when no explicit value is stored.
+// Returns map[productID]taxClassID.
+func (r *TaxRepository) GetProductTaxClassIDs(ctx context.Context, productIDs []int) (map[int]int, error) {
+	result := make(map[int]int, len(productIDs))
+	if len(productIDs) == 0 {
+		return result, nil
+	}
+
+	// Build IN clause
+	placeholders := make([]string, len(productIDs))
+	args := make([]interface{}, len(productIDs))
+	for i, id := range productIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := `
+		SELECT cpei.entity_id, COALESCE(cpei.value, ea.default_value, 0)
+		FROM eav_attribute ea
+		JOIN catalog_product_entity_int cpei
+			ON cpei.attribute_id = ea.attribute_id
+			AND cpei.store_id = 0
+			AND cpei.entity_id IN (` + strings.Join(placeholders, ",") + `)
+		WHERE ea.attribute_code = 'tax_class_id' AND ea.entity_type_id = 4`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return result, fmt.Errorf("batch tax class lookup: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var productID, taxClassID int
+		if err := rows.Scan(&productID, &taxClassID); err != nil {
+			continue
+		}
+		result[productID] = taxClassID
+	}
+
+	// For products not found (no EAV row), use attribute default_value
+	if len(result) < len(productIDs) {
+		var defaultValue int
+		r.db.QueryRowContext(ctx,
+			"SELECT COALESCE(default_value, 0) FROM eav_attribute WHERE attribute_code = 'tax_class_id' AND entity_type_id = 4",
+		).Scan(&defaultValue)
+		for _, id := range productIDs {
+			if _, ok := result[id]; !ok {
+				result[id] = defaultValue
+			}
+		}
+	}
+
+	return result, rows.Err()
 }
