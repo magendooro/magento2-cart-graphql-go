@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,7 @@ type CartService struct {
 	paymentRepo      *repository.PaymentRepository
 	taxRepo          *repository.TaxRepository
 	orderRepo        *repository.OrderRepository
+	couponRepo       *repository.CouponRepository
 	pipeline         *totals.Pipeline
 	cp               *config.ConfigProvider
 }
@@ -42,16 +44,17 @@ func NewCartService(
 	paymentRepo *repository.PaymentRepository,
 	taxRepo *repository.TaxRepository,
 	orderRepo *repository.OrderRepository,
+	couponRepo *repository.CouponRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	// Build totals pipeline (order matches Magento's sales.xml sort_order)
 	pipeline := totals.NewPipeline(
-		&totals.SubtotalCollector{},            // 100
-		// &totals.DiscountCollector{},          // 300 — Phase 2 (#10)
-		&totals.ShippingCollector{},             // 350
-		// &totals.ShippingTaxCollector{},       // 375 — Phase 3 (#21)
-		&totals.TaxCollector{TaxRepo: taxRepo},  // 450
-		&totals.GrandTotalCollector{},           // 550
+		&totals.SubtotalCollector{},                          // 100
+		&totals.DiscountCollector{CouponRepo: couponRepo},    // 300
+		&totals.ShippingCollector{},                          // 350
+		// &totals.ShippingTaxCollector{},                    // 375 — Phase 3 (#21)
+		&totals.TaxCollector{TaxRepo: taxRepo},               // 450
+		&totals.GrandTotalCollector{},                        // 550
 	)
 
 	return &CartService{
@@ -64,6 +67,7 @@ func NewCartService(
 		paymentRepo:      paymentRepo,
 		taxRepo:          taxRepo,
 		orderRepo:        orderRepo,
+		couponRepo:       couponRepo,
 		pipeline:         pipeline,
 		cp:               cp,
 	}
@@ -276,6 +280,109 @@ func (s *CartService) SetGuestEmail(ctx context.Context, maskedID, email string)
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 	s.cartRepo.UpdateEmail(ctx, quoteID, email)
+	return s.GetCart(ctx, maskedID)
+}
+
+// ApplyCoupon validates and applies a coupon code to the cart.
+func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode string) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+
+	// Check if coupon already applied
+	if cart.CouponCode != nil && *cart.CouponCode != "" {
+		return nil, fmt.Errorf("A coupon is already applied to the cart. Please remove it to apply another")
+	}
+
+	// Validate coupon
+	websiteID := s.cp.GetWebsiteID(cart.StoreID)
+	customerGroupID := 0 // guest
+	if cart.CustomerID != nil && *cart.CustomerID > 0 {
+		customerGroupID = 1 // General
+	}
+
+	_, rule, err := s.couponRepo.LookupCoupon(ctx, couponCode, websiteID, customerGroupID)
+	if err != nil {
+		return nil, fmt.Errorf("The coupon code isn't valid. Verify the code and try again.")
+	}
+
+	// Apply discount to items
+	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	targetSkus := s.couponRepo.GetRuleActionSkus(ctx, rule.RuleID)
+	skuSet := make(map[string]bool, len(targetSkus))
+	for _, sk := range targetSkus {
+		skuSet[sk] = true
+	}
+
+	ruleIDStr := fmt.Sprintf("%d", rule.RuleID)
+	for _, item := range items {
+		if item.ParentItemID != nil {
+			continue
+		}
+		if len(skuSet) > 0 && !skuSet[item.SKU] {
+			continue
+		}
+
+		var discountAmount float64
+		var discountPercent float64
+		switch rule.SimpleAction {
+		case "by_percent":
+			discountPercent = rule.DiscountAmount
+			discountAmount = item.RowTotal * discountPercent / 100.0
+		case "by_fixed":
+			discountAmount = rule.DiscountAmount * item.Qty
+		case "cart_fixed":
+			var totalSubtotal float64
+			for _, it := range items {
+				if it.ParentItemID == nil {
+					totalSubtotal += it.RowTotal
+				}
+			}
+			if totalSubtotal > 0 {
+				discountAmount = rule.DiscountAmount * (item.RowTotal / totalSubtotal)
+			}
+		}
+
+		discountAmount = math.Round(discountAmount*100) / 100
+		if discountAmount > item.RowTotal {
+			discountAmount = item.RowTotal
+		}
+
+		s.couponRepo.UpdateItemDiscount(ctx, item.ItemID, discountAmount, discountPercent, ruleIDStr)
+	}
+
+	// Store coupon on quote
+	s.couponRepo.SetCouponOnQuote(ctx, quoteID, couponCode, ruleIDStr)
+
+	// Recalculate totals (pipeline will pick up discount via DiscountCollector)
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
+
+	return s.GetCart(ctx, maskedID)
+}
+
+// RemoveCoupon removes the coupon from the cart.
+func (s *CartService) RemoveCoupon(ctx context.Context, maskedID string) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+
+	// Clear coupon and item discounts
+	s.couponRepo.ClearCouponOnQuote(ctx, quoteID)
+	s.couponRepo.ClearItemDiscounts(ctx, quoteID)
+
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+	}
+
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -590,6 +697,25 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 
 	subtotalInclTax := cart.Subtotal + totalTax
 
+	// Compute discount for display
+	var discountAmount float64
+	if displayTotals != nil {
+		discountAmount = displayTotals.DiscountAmount
+	}
+	subtotalWithDiscount := math.Round((cart.Subtotal-discountAmount)*100) / 100
+
+	var discounts []*model.Discount
+	if discountAmount > 0 {
+		label := "Discount"
+		if cart.CouponCode != nil && *cart.CouponCode != "" {
+			label = *cart.CouponCode
+		}
+		discounts = append(discounts, &model.Discount{
+			Amount: &model.Money{Value: &discountAmount, Currency: &currency},
+			Label:  label,
+		})
+	}
+
 	result := &model.Cart{
 		ID:            maskedID,
 		Items:         cartItems,
@@ -597,10 +723,12 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		IsVirtual:     isVirtual,
 		Email:         cart.CustomerEmail,
 		Prices: &model.CartPrices{
-			GrandTotal:           &model.Money{Value: &cart.GrandTotal, Currency: &currency},
-			SubtotalExcludingTax: &model.Money{Value: &cart.Subtotal, Currency: &currency},
-			SubtotalIncludingTax: &model.Money{Value: &subtotalInclTax, Currency: &currency},
-			AppliedTaxes:         appliedTaxes,
+			GrandTotal:                          &model.Money{Value: &cart.GrandTotal, Currency: &currency},
+			SubtotalExcludingTax:                &model.Money{Value: &cart.Subtotal, Currency: &currency},
+			SubtotalIncludingTax:                &model.Money{Value: &subtotalInclTax, Currency: &currency},
+			SubtotalWithDiscountExcludingTax:     &model.Money{Value: &subtotalWithDiscount, Currency: &currency},
+			AppliedTaxes:                         appliedTaxes,
+			Discounts:                            discounts,
 		},
 		ShippingAddresses: []*model.ShippingCartAddress{},
 	}
@@ -710,6 +838,18 @@ func (s *CartService) mapBillingAddress(ctx context.Context, a *repository.CartA
 
 func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {
 	uid := encodeUID(item.ItemID)
+	prices := &model.CartItemPrices{
+		Price:                &model.Money{Value: &item.Price, Currency: &currency},
+		RowTotal:             &model.Money{Value: &item.RowTotal, Currency: &currency},
+		RowTotalIncludingTax: &model.Money{Value: &item.RowTotal, Currency: &currency},
+	}
+	if item.DiscountAmount > 0 {
+		prices.TotalItemDiscount = &model.Money{Value: &item.DiscountAmount, Currency: &currency}
+		prices.Discounts = []*model.Discount{{
+			Amount: &model.Money{Value: &item.DiscountAmount, Currency: &currency},
+			Label:  "Discount",
+		}}
+	}
 	return &model.SimpleCartItem{
 		UID:      uid,
 		Quantity: item.Qty,
@@ -717,11 +857,7 @@ func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.
 			Sku:  item.SKU,
 			Name: &item.Name,
 		},
-		Prices: &model.CartItemPrices{
-			Price:              &model.Money{Value: &item.Price, Currency: &currency},
-			RowTotal:           &model.Money{Value: &item.RowTotal, Currency: &currency},
-			RowTotalIncludingTax: &model.Money{Value: &item.RowTotal, Currency: &currency},
-		},
+		Prices: prices,
 	}
 }
 

@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 )
@@ -110,12 +109,20 @@ func (r *mutationResolver) PlaceOrder(ctx context.Context, input *model.PlaceOrd
 
 // ApplyCouponToCart is the resolver for the applyCouponToCart field.
 func (r *mutationResolver) ApplyCouponToCart(ctx context.Context, input *model.ApplyCouponToCartInput) (*model.ApplyCouponToCartOutput, error) {
-	return nil, fmt.Errorf("not implemented: ApplyCouponToCart")
+	cart, err := r.CartService.ApplyCoupon(ctx, input.CartID, input.CouponCode)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ApplyCouponToCartOutput{Cart: cart}, nil
 }
 
 // RemoveCouponFromCart is the resolver for the removeCouponFromCart field.
 func (r *mutationResolver) RemoveCouponFromCart(ctx context.Context, input *model.RemoveCouponFromCartInput) (*model.RemoveCouponFromCartOutput, error) {
-	return nil, fmt.Errorf("not implemented: RemoveCouponFromCart")
+	cart, err := r.CartService.RemoveCoupon(ctx, input.CartID)
+	if err != nil {
+		return nil, err
+	}
+	return &model.RemoveCouponFromCartOutput{Cart: cart}, nil
 }
 
 // Cart is the resolver for the cart field.
