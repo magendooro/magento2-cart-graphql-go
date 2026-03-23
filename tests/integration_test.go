@@ -988,3 +988,106 @@ func TestShippingTaxWithConfig(t *testing.T) {
 	// Just verify no errors — the actual tax calculation depends on ConfigProvider reload
 	t.Log("PASS: shipping tax collector runs without errors")
 }
+
+func TestEUVATCountryLevelTax(t *testing.T) {
+	// Create a German VAT rate (19%) and link it to a tax rule
+	// This tests country-level tax (region_id=0) — the EU VAT pattern
+
+	// Insert test tax rate for Germany
+	result, err := testDB.Exec("INSERT INTO tax_calculation_rate (tax_country_id, tax_region_id, tax_postcode, code, rate) VALUES ('DE', 0, '*', 'DE-VAT-19', 19.0000)")
+	if err != nil {
+		t.Fatalf("insert tax rate: %v", err)
+	}
+	rateID, _ := result.LastInsertId()
+
+	// Insert tax rule
+	ruleResult, err := testDB.Exec("INSERT INTO tax_calculation_rule (code, priority, position, calculate_subtotal) VALUES ('EU-VAT-Test', 0, 0, 0)")
+	if err != nil {
+		testDB.Exec("DELETE FROM tax_calculation_rate WHERE tax_calculation_rate_id = ?", rateID)
+		t.Fatalf("insert tax rule: %v", err)
+	}
+	ruleID, _ := ruleResult.LastInsertId()
+
+	// Link rate → rule → product class 2 (Taxable Goods) + customer class 3 (Retail Customer)
+	testDB.Exec("INSERT INTO tax_calculation (tax_calculation_rate_id, tax_calculation_rule_id, customer_tax_class_id, product_tax_class_id) VALUES (?, ?, 3, 2)", rateID, ruleID)
+
+	// Cleanup
+	defer func() {
+		testDB.Exec("DELETE FROM tax_calculation WHERE tax_calculation_rule_id = ?", ruleID)
+		testDB.Exec("DELETE FROM tax_calculation_rule WHERE tax_calculation_rule_id = ?", ruleID)
+		testDB.Exec("DELETE FROM tax_calculation_rate WHERE tax_calculation_rate_id = ?", rateID)
+	}()
+
+	// Create cart, add product, set German shipping address
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1) // $34, tax_class_id=2
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setShippingAddressesOnCart(input: {
+			cart_id: "%s"
+			shipping_addresses: [{
+				address: {
+					firstname: "Hans", lastname: "Müller",
+					street: ["Berliner Str. 1"], city: "Berlin",
+					postcode: "10115", country_code: "DE",
+					telephone: "030123456"
+				}
+			}]
+		}) {
+			cart {
+				prices {
+					subtotal_excluding_tax { value }
+					subtotal_including_tax { value }
+					grand_total { value }
+					applied_taxes { amount { value } label }
+				}
+			}
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("set shipping: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		SetShippingAddressesOnCart struct {
+			Cart struct {
+				Prices struct {
+					SubtotalExcludingTax struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					SubtotalIncludingTax struct{ Value float64 } `json:"subtotal_including_tax"`
+					GrandTotal           struct{ Value float64 } `json:"grand_total"`
+					AppliedTaxes         []struct {
+						Amount struct{ Value float64 } `json:"amount"`
+						Label  string                  `json:"label"`
+					} `json:"applied_taxes"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"setShippingAddressesOnCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	prices := data.SetShippingAddressesOnCart.Cart.Prices
+	if prices.SubtotalExcludingTax.Value != 34 {
+		t.Errorf("expected subtotal 34, got %v", prices.SubtotalExcludingTax.Value)
+	}
+
+	// 19% of $34 = $6.46
+	expectedTax := 6.46
+	if len(prices.AppliedTaxes) != 1 {
+		t.Errorf("expected 1 applied tax (DE-VAT-19), got %d", len(prices.AppliedTaxes))
+	} else {
+		if prices.AppliedTaxes[0].Amount.Value != expectedTax {
+			t.Errorf("expected tax %v, got %v", expectedTax, prices.AppliedTaxes[0].Amount.Value)
+		}
+		if prices.AppliedTaxes[0].Label != "DE-VAT-19" {
+			t.Errorf("expected label DE-VAT-19, got %s", prices.AppliedTaxes[0].Label)
+		}
+	}
+
+	// Grand total = 34 + 6.46 = 40.46
+	expectedGrandTotal := 34 + expectedTax
+	if prices.GrandTotal.Value != expectedGrandTotal {
+		t.Errorf("expected grand_total %v, got %v", expectedGrandTotal, prices.GrandTotal.Value)
+	}
+
+	t.Logf("PASS: EU VAT — DE 19%% on $34 = $%.2f tax, grand_total=$%.2f", expectedTax, prices.GrandTotal.Value)
+}
