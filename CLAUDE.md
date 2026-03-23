@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1 + Phase 2: Complete.** 27 tests (22 integration + 5 comparison). Architecture: totals pipeline, carrier registry, error constants.
+**Phase 1 + Phase 2 + Phase 3 (partial): Complete.** 29 tests (24 integration + 5 comparison). EU VAT, tax on shipping, virtual products, structured PlaceOrder errors, discount propagation all done.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
@@ -86,14 +86,14 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 
 ### What works
 - US state-level tax (region_id based)
+- EU VAT country-level tax (region_id=0) — verified with DE 19%
+- Tax on shipping via ShippingTaxCollector (when tax/classes/shipping_tax_class configured)
 - Product tax class matching via `eav_attribute.default_value` fallback
 - Customer tax class (default: Retail Customer, class 3)
 - tax_calculation_rate → tax_calculation → tax_calculation_rule join
 
 ### What doesn't work yet
-- EU VAT (country-level, no region) — #19
 - Tax-inclusive pricing (price_includes_tax config) — #20
-- Tax on shipping — #21
 - Compound/stacked tax rules — #22
 - FPT/WEEE tax
 
@@ -103,9 +103,9 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 - Simple products: add, update qty, remove, price, stock check
 - Configurable products: selected_options decoding, parent+child quote_items, ConfigurableCartItem response
 - Bundle products: bundle option/selection decoding, dynamic pricing, BundleCartItem response
+- Virtual/Downloadable: is_virtual auto-detected, shipping skipped for virtual carts
 
 ### Not yet
-- Virtual/Downloadable: need is_virtual cart detection, no shipping — #23
 - Grouped: add children as individual simple items — #24
 
 ## Lessons Learned
