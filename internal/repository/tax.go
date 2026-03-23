@@ -49,10 +49,10 @@ func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regi
 		return nil, nil
 	}
 
-	// Find matching tax rates for this address
+	// Find matching tax rates for this address, grouped by priority
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT tcr.tax_calculation_rate_id, tcr.code, tcr.rate,
-		       tc.product_tax_class_id
+		       tc.product_tax_class_id, tcrl.priority
 		FROM tax_calculation_rate tcr
 		JOIN tax_calculation tc ON tcr.tax_calculation_rate_id = tc.tax_calculation_rate_id
 		JOIN tax_calculation_rule tcrl ON tc.tax_calculation_rule_id = tcrl.tax_calculation_rule_id
@@ -68,57 +68,87 @@ func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regi
 	}
 	defer rows.Close()
 
-	// Build rate map: product_tax_class_id → (rate, label)
-	type rateInfo struct {
-		rate  float64
-		label string
+	// Collect all matching rates with their priority and product class
+	type rateEntry struct {
+		code            string
+		rate            float64
+		productClassID  int
+		priority        int
 	}
-	ratesByProductClass := make(map[int]*rateInfo)
+	var allRates []rateEntry
+	seen := make(map[string]bool) // deduplicate by code+productClass
 
 	for rows.Next() {
-		var rateID int
+		var rateID, productTaxClassID, priority int
 		var code string
 		var rate float64
-		var productTaxClassID int
-		if err := rows.Scan(&rateID, &code, &rate, &productTaxClassID); err != nil {
+		if err := rows.Scan(&rateID, &code, &rate, &productTaxClassID, &priority); err != nil {
 			continue
 		}
-		if _, exists := ratesByProductClass[productTaxClassID]; !exists {
-			ratesByProductClass[productTaxClassID] = &rateInfo{rate: rate, label: code}
+		key := fmt.Sprintf("%s-%d", code, productTaxClassID)
+		if !seen[key] {
+			seen[key] = true
+			allRates = append(allRates, rateEntry{code: code, rate: rate, productClassID: productTaxClassID, priority: priority})
 		}
 	}
 
-	if len(ratesByProductClass) == 0 {
+	if len(allRates) == 0 {
 		return nil, nil
 	}
 
-	// Calculate tax per item based on product tax class
+	// Group rates by priority for compound calculation
+	// Same priority = additive (rates sum on original amount)
+	// Different priority = compound (apply on already-taxed amount)
+	type priorityGroup struct {
+		priority int
+		rates    []rateEntry
+	}
+	var groups []priorityGroup
+	lastPriority := -1
+	for _, r := range allRates {
+		if r.priority != lastPriority {
+			groups = append(groups, priorityGroup{priority: r.priority})
+			lastPriority = r.priority
+		}
+		groups[len(groups)-1].rates = append(groups[len(groups)-1].rates, r)
+	}
+
+	// Calculate tax per item with compound support
 	taxByLabel := make(map[string]float64)
 
 	for _, item := range items {
 		if item.ParentItemID != nil {
-			continue // skip child items
+			continue
 		}
-		ri, ok := ratesByProductClass[item.ProductTaxClassID]
-		if !ok || ri.rate == 0 {
-			continue // product not taxable under this rule
+		taxableAmount := item.RowTotal
+
+		for _, group := range groups {
+			groupTax := 0.0
+			for _, r := range group.rates {
+				if r.productClassID != item.ProductTaxClassID {
+					continue
+				}
+				rateTax := taxableAmount * r.rate / 100.0
+				groupTax += rateTax
+				taxByLabel[r.code] += rateTax
+			}
+			// For compound: next priority group taxes the amount + previous tax
+			taxableAmount += groupTax
 		}
-		itemTax := item.RowTotal * ri.rate / 100.0
-		taxByLabel[ri.label] += itemTax
 	}
 
 	var results []*TaxResult
-	for label, amount := range taxByLabel {
-		ri := ratesByProductClass[0] // get any rate for the percentage
-		for _, r := range ratesByProductClass {
-			ri = r
-			break
+	for _, r := range allRates {
+		amount, ok := taxByLabel[r.code]
+		if !ok || amount == 0 {
+			continue
 		}
 		results = append(results, &TaxResult{
 			TaxAmount: math.Round(amount*100) / 100,
-			Label:     label,
-			Rate:      ri.rate,
+			Label:     r.code,
+			Rate:      r.rate,
 		})
+		delete(taxByLabel, r.code) // prevent duplicates
 	}
 
 	return results, nil
