@@ -23,6 +23,7 @@ type CartService struct {
 	shippingRepo *repository.ShippingRepository
 	paymentRepo  *repository.PaymentRepository
 	taxRepo      *repository.TaxRepository
+	orderRepo    *repository.OrderRepository
 	cp           *config.ConfigProvider
 }
 
@@ -34,16 +35,18 @@ func NewCartService(
 	shippingRepo *repository.ShippingRepository,
 	paymentRepo *repository.PaymentRepository,
 	taxRepo *repository.TaxRepository,
+	orderRepo *repository.OrderRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	return &CartService{
-		cartRepo:    cartRepo,
-		maskRepo:    maskRepo,
-		itemRepo:    itemRepo,
+		cartRepo:     cartRepo,
+		maskRepo:     maskRepo,
+		itemRepo:     itemRepo,
 		addressRepo:  addressRepo,
 		shippingRepo: shippingRepo,
 		paymentRepo:  paymentRepo,
 		taxRepo:      taxRepo,
+		orderRepo:    orderRepo,
 		cp:           cp,
 	}
 }
@@ -405,6 +408,99 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 
 	s.recalculateTotals(ctx, quoteID)
 	return s.GetCart(ctx, maskedID)
+}
+
+// PlaceOrder validates cart state and converts it into an order.
+func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return "", fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return "", fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+	if cart.IsActive != 1 {
+		return "", fmt.Errorf("The cart isn't active.")
+	}
+
+	// Validate items exist
+	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	if err != nil || len(items) == 0 {
+		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+	}
+
+	// Validate addresses
+	addrs, err := s.addressRepo.GetByQuoteID(ctx, quoteID)
+	if err != nil {
+		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+	}
+
+	var hasShipping, hasBilling bool
+	for _, a := range addrs {
+		if a.AddressType == "shipping" {
+			hasShipping = true
+			if a.ShippingMethod == nil || *a.ShippingMethod == "" {
+				return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+			}
+		}
+		if a.AddressType == "billing" {
+			hasBilling = true
+		}
+	}
+
+	if cart.IsVirtual != 1 && !hasShipping {
+		return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+	}
+	if !hasBilling {
+		return "", fmt.Errorf("Unable to place order: Some addresses can't be used due to the configurations for specific countries.")
+	}
+
+	// Validate payment
+	selectedPayment, err := s.paymentRepo.GetSelectedMethod(ctx, quoteID)
+	if err != nil || selectedPayment.Code == "" {
+		return "", fmt.Errorf("Unable to place order: Enter a valid payment method and try again.")
+	}
+
+	// Validate guest email
+	if cart.CustomerID == nil || *cart.CustomerID == 0 {
+		if cart.CustomerEmail == nil || *cart.CustomerEmail == "" {
+			return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+		}
+	}
+
+	// Compute tax for the order
+	var totalTax float64
+	for _, a := range addrs {
+		if a.AddressType == "shipping" && a.CountryID != "" {
+			regionID := 0
+			if a.RegionID != nil {
+				regionID = *a.RegionID
+			}
+			postcode := "*"
+			if a.Postcode != nil {
+				postcode = *a.Postcode
+			}
+			for _, item := range items {
+				item.ProductTaxClassID = s.taxRepo.GetProductTaxClassID(ctx, item.ProductID)
+			}
+			taxResults, _ := s.taxRepo.CalculateTax(ctx, a.CountryID, regionID, postcode, items, 3)
+			for _, tr := range taxResults {
+				totalTax += tr.TaxAmount
+			}
+			break
+		}
+	}
+
+	incrementID, err := s.orderRepo.PlaceOrder(ctx, cart, items, addrs, selectedPayment.Code, totalTax)
+	if err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
+		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+	}
+
+	log.Info().Str("increment_id", incrementID).Int("quote_id", quoteID).Msg("order placed")
+	return incrementID, nil
 }
 
 // ── Mapping ─────────────────────────────────────────────────────────────────
