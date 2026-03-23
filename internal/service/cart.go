@@ -13,20 +13,22 @@ import (
 	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/totals"
 )
 
 type CartService struct {
-	cartRepo     *repository.CartRepository
-	maskRepo     *repository.CartMaskRepository
-	itemRepo     *repository.CartItemRepository
-	addressRepo  *repository.CartAddressRepository
-	shippingRepo *repository.ShippingRepository
-	paymentRepo  *repository.PaymentRepository
-	taxRepo      *repository.TaxRepository
-	orderRepo    *repository.OrderRepository
-	pipeline     *totals.Pipeline
-	cp           *config.ConfigProvider
+	cartRepo         *repository.CartRepository
+	maskRepo         *repository.CartMaskRepository
+	itemRepo         *repository.CartItemRepository
+	addressRepo      *repository.CartAddressRepository
+	shippingRepo     *repository.ShippingRepository
+	shippingRegistry *shipping.Registry
+	paymentRepo      *repository.PaymentRepository
+	taxRepo          *repository.TaxRepository
+	orderRepo        *repository.OrderRepository
+	pipeline         *totals.Pipeline
+	cp               *config.ConfigProvider
 }
 
 func NewCartService(
@@ -35,6 +37,7 @@ func NewCartService(
 	itemRepo *repository.CartItemRepository,
 	addressRepo *repository.CartAddressRepository,
 	shippingRepo *repository.ShippingRepository,
+	shippingRegistry *shipping.Registry,
 	paymentRepo *repository.PaymentRepository,
 	taxRepo *repository.TaxRepository,
 	orderRepo *repository.OrderRepository,
@@ -51,16 +54,17 @@ func NewCartService(
 	)
 
 	return &CartService{
-		cartRepo:     cartRepo,
-		maskRepo:     maskRepo,
-		itemRepo:     itemRepo,
-		addressRepo:  addressRepo,
-		shippingRepo: shippingRepo,
-		paymentRepo:  paymentRepo,
-		taxRepo:      taxRepo,
-		orderRepo:    orderRepo,
-		pipeline:     pipeline,
-		cp:           cp,
+		cartRepo:         cartRepo,
+		maskRepo:         maskRepo,
+		itemRepo:         itemRepo,
+		addressRepo:      addressRepo,
+		shippingRepo:     shippingRepo,
+		shippingRegistry: shippingRegistry,
+		paymentRepo:      paymentRepo,
+		taxRepo:          taxRepo,
+		orderRepo:        orderRepo,
+		pipeline:         pipeline,
+		cp:               cp,
 	}
 }
 
@@ -413,10 +417,11 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 		// Find shipping address
 		for _, a := range addrs {
 			if a.AddressType == "shipping" {
-				// Validate carrier/method
+				// Validate carrier/method via registry
 				storeID := middleware.GetStoreID(ctx)
-				rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal, cart.ItemsQty)
-				var selectedRate *repository.ShippingRate
+				req := s.buildRateRequest(storeID, a, cart)
+				rates := s.shippingRegistry.CollectRates(ctx, req)
+				var selectedRate *shipping.Rate
 				for _, r := range rates {
 					if r.CarrierCode == method.CarrierCode && r.MethodCode == method.MethodCode {
 						selectedRate = r
@@ -602,17 +607,18 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		switch a.AddressType {
 		case "shipping":
 			sa := s.mapShippingAddress(ctx, a)
-			// Load available shipping methods
-			rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal, cart.ItemsQty)
+			// Load available shipping methods via carrier registry
+			req := s.buildRateRequest(storeID, a, cart)
+			rates := s.shippingRegistry.CollectRates(ctx, req)
 			for _, r := range rates {
-				available := true
+				price := r.Price
 				sa.AvailableShippingMethods = append(sa.AvailableShippingMethods, &model.AvailableShippingMethod{
 					CarrierCode:  r.CarrierCode,
 					CarrierTitle: r.CarrierTitle,
 					MethodCode:   r.MethodCode,
 					MethodTitle:  r.MethodTitle,
-					Amount:       &model.Money{Value: &r.Price, Currency: &currency},
-					Available:    available,
+					Amount:       &model.Money{Value: &price, Currency: &currency},
+					Available:    true,
 				})
 			}
 			result.ShippingAddresses = append(result.ShippingAddresses, sa)
@@ -736,4 +742,16 @@ func toStringPtrs(ss []string) []*string {
 		result[i] = &ss[i]
 	}
 	return result
+}
+
+func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddressData, cart *repository.CartData) *shipping.RateRequest {
+	return &shipping.RateRequest{
+		StoreID:   storeID,
+		WebsiteID: s.cp.GetWebsiteID(storeID),
+		CountryID: addr.CountryID,
+		RegionID:  addr.RegionID,
+		Postcode:  addr.Postcode,
+		Subtotal:  cart.Subtotal,
+		ItemQty:   cart.ItemsQty,
+	}
 }
