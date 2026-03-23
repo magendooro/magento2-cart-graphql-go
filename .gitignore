@@ -1,0 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/server
+/customer-graphql
+
+# Test binary
+*.test
+
+# Output
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+log/
+*.log
+
+# Local config (use config.yaml.example as template)
+config/config.yaml
+config/config.local.yaml
+.env
+
+# Internal development docs
+.dev/
+
+# Claude Code (version skills, ignore local settings and memory)
+.claude/settings.local.json
+.claude/projects/
+.claude/memory/

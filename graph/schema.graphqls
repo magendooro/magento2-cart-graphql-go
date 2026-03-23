@@ -1,0 +1,398 @@
+# Magento 2 Cart/Checkout GraphQL Schema
+# Go drop-in replacement for Magento's cart and checkout GraphQL operations
+
+type Query {
+    """Fetch a cart by its masked ID."""
+    cart(cart_id: String!): Cart
+
+    """Fetch the authenticated customer's active cart."""
+    customerCart: Cart!
+}
+
+type Mutation {
+    """Create an empty cart and return its masked ID."""
+    createEmptyCart(input: createEmptyCartInput): String
+
+    """Create a guest cart and return the full Cart object."""
+    createGuestCart(input: CreateGuestCartInput): CreateGuestCartOutput
+
+    """Add products to cart (simple products for Phase 1)."""
+    addProductsToCart(cartId: String!, cartItems: [CartItemInput!]!): AddProductsToCartOutput
+
+    """Update cart item quantities."""
+    updateCartItems(input: UpdateCartItemsInput): UpdateCartItemsOutput
+
+    """Remove an item from the cart."""
+    removeItemFromCart(input: RemoveItemFromCartInput): RemoveItemFromCartOutput
+
+    """Set shipping address(es) on the cart."""
+    setShippingAddressesOnCart(input: SetShippingAddressesOnCartInput): SetShippingAddressesOnCartOutput
+
+    """Set billing address on the cart."""
+    setBillingAddressOnCart(input: SetBillingAddressOnCartInput): SetBillingAddressOnCartOutput
+
+    """Set shipping method(s) on the cart."""
+    setShippingMethodsOnCart(input: SetShippingMethodsOnCartInput): SetShippingMethodsOnCartOutput
+
+    """Set the payment method on the cart."""
+    setPaymentMethodOnCart(input: SetPaymentMethodOnCartInput): SetPaymentMethodOnCartOutput
+
+    """Set the guest email on the cart."""
+    setGuestEmailOnCart(input: SetGuestEmailOnCartInput): SetGuestEmailOnCartOutput
+
+    """Convert the cart into an order."""
+    placeOrder(input: PlaceOrderInput): PlaceOrderOutput
+
+    """Apply a coupon to the cart."""
+    applyCouponToCart(input: ApplyCouponToCartInput): ApplyCouponToCartOutput
+
+    """Remove a coupon from the cart."""
+    removeCouponFromCart(input: RemoveCouponFromCartInput): RemoveCouponFromCartOutput
+}
+
+# ─── Cart Type ───────────────────────────────────────────────────────────────
+
+type Cart {
+    id: ID!
+    items: [CartItemInterface]
+    total_quantity: Float!
+    is_virtual: Boolean!
+    email: String
+    applied_coupons: [AppliedCoupon]
+    shipping_addresses: [ShippingCartAddress]!
+    billing_address: BillingCartAddress
+    available_payment_methods: [AvailablePaymentMethod]
+    selected_payment_method: SelectedPaymentMethod
+    prices: CartPrices
+}
+
+interface CartItemInterface {
+    uid: ID!
+    quantity: Float!
+    prices: CartItemPrices
+    product: CartItemProduct!
+    errors: [CartItemError]
+}
+
+type SimpleCartItem implements CartItemInterface {
+    uid: ID!
+    quantity: Float!
+    prices: CartItemPrices
+    product: CartItemProduct!
+    errors: [CartItemError]
+}
+
+type CartItemProduct {
+    sku: String!
+    name: String
+    url_key: String
+    thumbnail: CartItemProductImage
+}
+
+type CartItemProductImage {
+    url: String
+    label: String
+}
+
+type CartItemError {
+    code: CartItemErrorType!
+    message: String!
+}
+
+enum CartItemErrorType {
+    UNDEFINED
+    ITEM_QTY
+    ITEM_INCREMENTS
+}
+
+# ─── Prices ──────────────────────────────────────────────────────────────────
+
+type CartPrices {
+    grand_total: Money
+    subtotal_including_tax: Money
+    subtotal_excluding_tax: Money
+    subtotal_with_discount_excluding_tax: Money
+    applied_taxes: [CartTaxItem]
+    discounts: [Discount]
+}
+
+type CartItemPrices {
+    price: Money!
+    row_total: Money!
+    row_total_including_tax: Money!
+    total_item_discount: Money
+    discounts: [Discount]
+}
+
+type CartTaxItem {
+    amount: Money!
+    label: String!
+}
+
+type Discount {
+    amount: Money!
+    label: String!
+}
+
+type Money {
+    value: Float
+    currency: CurrencyEnum
+}
+
+type AppliedCoupon {
+    code: String!
+}
+
+# ─── Addresses ───────────────────────────────────────────────────────────────
+
+type ShippingCartAddress {
+    firstname: String!
+    lastname: String!
+    street: [String]!
+    city: String!
+    region: CartAddressRegion
+    postcode: String
+    country: CartAddressCountry!
+    telephone: String
+    company: String
+    available_shipping_methods: [AvailableShippingMethod]
+    selected_shipping_method: SelectedShippingMethod
+}
+
+type BillingCartAddress {
+    firstname: String!
+    lastname: String!
+    street: [String]!
+    city: String!
+    region: CartAddressRegion
+    postcode: String
+    country: CartAddressCountry!
+    telephone: String
+    company: String
+}
+
+type CartAddressRegion {
+    code: String
+    label: String
+    region_id: Int
+}
+
+type CartAddressCountry {
+    code: String!
+    label: String!
+}
+
+# ─── Shipping ────────────────────────────────────────────────────────────────
+
+type AvailableShippingMethod {
+    carrier_code: String!
+    carrier_title: String!
+    method_code: String!
+    method_title: String!
+    amount: Money!
+    available: Boolean!
+}
+
+type SelectedShippingMethod {
+    carrier_code: String!
+    carrier_title: String!
+    method_code: String!
+    method_title: String!
+    amount: Money!
+}
+
+# ─── Payment ─────────────────────────────────────────────────────────────────
+
+type AvailablePaymentMethod {
+    code: String!
+    title: String!
+}
+
+type SelectedPaymentMethod {
+    code: String!
+    title: String
+}
+
+# ─── Input Types ─────────────────────────────────────────────────────────────
+
+input createEmptyCartInput {
+    cart_id: String
+}
+
+input CreateGuestCartInput {
+    cart_uid: ID
+}
+
+input CartItemInput {
+    sku: String!
+    quantity: Float!
+    parent_sku: String
+    selected_options: [ID!]
+    entered_options: [EnteredOptionInput!]
+}
+
+input EnteredOptionInput {
+    uid: ID!
+    value: String!
+}
+
+input UpdateCartItemsInput {
+    cart_id: String!
+    cart_items: [CartItemUpdateInput!]!
+}
+
+input CartItemUpdateInput {
+    cart_item_uid: ID!
+    quantity: Float!
+}
+
+input RemoveItemFromCartInput {
+    cart_id: String!
+    cart_item_uid: ID!
+}
+
+input SetShippingAddressesOnCartInput {
+    cart_id: String!
+    shipping_addresses: [ShippingAddressInput!]!
+}
+
+input ShippingAddressInput {
+    address: CartAddressInput
+    customer_address_id: Int
+}
+
+input SetBillingAddressOnCartInput {
+    cart_id: String!
+    billing_address: BillingAddressInput!
+}
+
+input BillingAddressInput {
+    address: CartAddressInput
+    customer_address_id: Int
+    same_as_shipping: Boolean
+}
+
+input CartAddressInput {
+    firstname: String!
+    lastname: String!
+    company: String
+    street: [String!]!
+    city: String!
+    region: String
+    region_id: Int
+    postcode: String
+    country_code: String!
+    telephone: String
+}
+
+input SetShippingMethodsOnCartInput {
+    cart_id: String!
+    shipping_methods: [ShippingMethodInput!]!
+}
+
+input ShippingMethodInput {
+    carrier_code: String!
+    method_code: String!
+}
+
+input SetPaymentMethodOnCartInput {
+    cart_id: String!
+    payment_method: PaymentMethodInput!
+}
+
+input PaymentMethodInput {
+    code: String!
+}
+
+input SetGuestEmailOnCartInput {
+    cart_id: String!
+    email: String!
+}
+
+input PlaceOrderInput {
+    cart_id: String!
+}
+
+input ApplyCouponToCartInput {
+    cart_id: String!
+    coupon_code: String!
+}
+
+input RemoveCouponFromCartInput {
+    cart_id: String!
+}
+
+# ─── Output Types ────────────────────────────────────────────────────────────
+
+type CreateGuestCartOutput {
+    cart: Cart
+}
+
+type AddProductsToCartOutput {
+    cart: Cart!
+    user_errors: [CartUserInputError!]!
+}
+
+type CartUserInputError {
+    code: CartUserInputErrorType!
+    message: String!
+}
+
+enum CartUserInputErrorType {
+    PRODUCT_NOT_FOUND
+    NOT_SALABLE
+    INSUFFICIENT_STOCK
+    UNDEFINED
+}
+
+type UpdateCartItemsOutput {
+    cart: Cart!
+}
+
+type RemoveItemFromCartOutput {
+    cart: Cart!
+}
+
+type SetShippingAddressesOnCartOutput {
+    cart: Cart!
+}
+
+type SetBillingAddressOnCartOutput {
+    cart: Cart!
+}
+
+type SetShippingMethodsOnCartOutput {
+    cart: Cart!
+}
+
+type SetPaymentMethodOnCartOutput {
+    cart: Cart!
+}
+
+type SetGuestEmailOnCartOutput {
+    cart: Cart!
+}
+
+type PlaceOrderOutput {
+    orderV2: PlacedOrder
+}
+
+type PlacedOrder {
+    number: String!
+}
+
+type ApplyCouponToCartOutput {
+    cart: Cart!
+}
+
+type RemoveCouponFromCartOutput {
+    cart: Cart!
+}
+
+# ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum CurrencyEnum {
+    USD EUR GBP CAD AUD JPY CNY CHF SEK NOK DKK NZD MXN SGD HKD
+    INR BRL ZAR RUB KRW TRY PLN CZK HUF RON BGN HRK ILS PHP THB
+    MYR IDR AED SAR QAR KWD BHD OMR JOD LBP EGP MAD TND DZD
+}
