@@ -103,13 +103,7 @@ func (r *mutationResolver) SetGuestEmailOnCart(ctx context.Context, input *model
 
 // PlaceOrder is the resolver for the placeOrder field.
 func (r *mutationResolver) PlaceOrder(ctx context.Context, input *model.PlaceOrderInput) (*model.PlaceOrderOutput, error) {
-	incrementID, err := r.CartService.PlaceOrder(ctx, input.CartID)
-	if err != nil {
-		return nil, err
-	}
-	return &model.PlaceOrderOutput{
-		OrderV2: &model.PlacedOrder{Number: incrementID},
-	}, nil
+	return r.CartService.PlaceOrder(ctx, input.CartID)
 }
 
 // ApplyCouponToCart is the resolver for the applyCouponToCart field.

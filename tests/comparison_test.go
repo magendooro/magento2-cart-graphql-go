@@ -251,6 +251,7 @@ func TestCompare_FullCheckoutFlow(t *testing.T) {
 	placeQuery := func(cartID string) string {
 		return fmt.Sprintf(`mutation {
 			placeOrder(input: { cart_id: "%s" }) {
+				errors { code message }
 				orderV2 { number }
 			}
 		}`, cartID)
@@ -936,39 +937,38 @@ func TestCompare_CouponApplyRemove(t *testing.T) {
 // ─── Error Behavior Comparison ──────────────────────────────────────────────
 
 func TestCompare_EmptyCartPlaceOrder(t *testing.T) {
-	// Both should error when trying to place an order on an empty cart
+	// Go returns structured errors in data.placeOrder.errors (matching Magento pattern)
 	goResp := doQuery(t, `mutation { createEmptyCart }`, "")
-	mResp := doMagentoQuery(t, `mutation { createEmptyCart }`, "")
-
-	var goCreate, mCreate struct {
-		CreateEmptyCart string `json:"createEmptyCart"`
-	}
+	var goCreate struct{ CreateEmptyCart string `json:"createEmptyCart"` }
 	json.Unmarshal(goResp.Data, &goCreate)
-	json.Unmarshal(mResp.Data, &mCreate)
 
-	placeQuery := func(cartID string) string {
-		return fmt.Sprintf(`mutation { placeOrder(input: { cart_id: "%s" }) { orderV2 { number } } }`, cartID)
+	placeQuery := fmt.Sprintf(`mutation {
+		placeOrder(input: { cart_id: "%s" }) {
+			errors { code message }
+			orderV2 { number }
+		}
+	}`, goCreate.CreateEmptyCart)
+
+	goResp = doQuery(t, placeQuery, "")
+
+	// Go now returns structured errors in the response data, not top-level GraphQL errors
+	var data struct {
+		PlaceOrder struct {
+			Errors  []struct{ Code, Message string } `json:"errors"`
+			OrderV2 *struct{ Number string }         `json:"orderV2"`
+		} `json:"placeOrder"`
 	}
+	json.Unmarshal(goResp.Data, &data)
 
-	goResp = doQuery(t, placeQuery(goCreate.CreateEmptyCart), "")
-	mResp = doMagentoQuery(t, placeQuery(mCreate.CreateEmptyCart), "")
-
-	if len(goResp.Errors) == 0 {
-		t.Error("Go should error on empty cart placeOrder")
+	if len(data.PlaceOrder.Errors) == 0 {
+		t.Error("Go should return structured errors for empty cart placeOrder")
 	} else {
-		t.Logf("Go error: %s", goResp.Errors[0].Message)
+		t.Logf("Go structured error: code=%s, message=%s", data.PlaceOrder.Errors[0].Code, data.PlaceOrder.Errors[0].Message)
 	}
-	if len(mResp.Errors) == 0 {
-		t.Logf("Magento did not error on empty cart placeOrder (may return null data)")
-	} else {
-		t.Logf("Magento error: %s", mResp.Errors[0].Message)
+	if data.PlaceOrder.OrderV2 != nil {
+		t.Error("expected nil orderV2 for empty cart")
 	}
-	// Both should produce errors for empty cart
-	if len(goResp.Errors) > 0 && len(mResp.Errors) > 0 {
-		t.Log("PASS: both error on empty cart placeOrder")
-	} else if len(goResp.Errors) > 0 {
-		t.Log("PASS: Go correctly rejects empty cart (Magento behavior may differ)")
-	}
+	t.Log("PASS: Go returns structured PlaceOrderError for empty cart")
 }
 
 // ─── Assertion Helpers ──────────────────────────────────────────────────────

@@ -444,7 +444,13 @@ type SetGuestEmailOnCartOutput {
 }
 
 type PlaceOrderOutput {
+    errors: [PlaceOrderError!]!
     orderV2: PlacedOrder
+}
+
+type PlaceOrderError {
+    code: PlaceOrderErrorCodes!
+    message: String!
 }
 
 type PlacedOrder {
@@ -468,6 +474,14 @@ type EstimateTotalsOutput {
 }
 
 # ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum PlaceOrderErrorCodes {
+    CART_NOT_FOUND
+    CART_NOT_ACTIVE
+    GUEST_EMAIL_MISSING
+    UNABLE_TO_PLACE_ORDER
+    UNDEFINED
+}
 
 enum CurrencyEnum {
     USD EUR GBP CAD AUD JPY CNY CHF SEK NOK DKK NZD MXN SGD HKD

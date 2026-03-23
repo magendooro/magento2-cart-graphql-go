@@ -782,30 +782,40 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 }
 
 // PlaceOrder validates cart state and converts it into an order.
-func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, error) {
+func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.PlaceOrderOutput, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return "", carterr.ErrCartNotFound(maskedID)
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesCartNotFound, Message: carterr.ErrCartNotFound(maskedID).Error()}},
+		}, nil
 	}
 
 	cart, err := s.cartRepo.GetByID(ctx, quoteID)
 	if err != nil {
-		return "", carterr.ErrCartNotFound(maskedID)
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesCartNotFound, Message: carterr.ErrCartNotFound(maskedID).Error()}},
+		}, nil
 	}
 	if cart.IsActive != 1 {
-		return "", carterr.ErrCartNotActive
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesCartNotActive, Message: carterr.ErrCartNotActive.Error()}},
+		}, nil
 	}
 
 	// Validate items exist
 	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
 	if err != nil || len(items) == 0 {
-		return "", carterr.ErrPlaceOrderFailed
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrPlaceOrderFailed.Error()}},
+		}, nil
 	}
 
 	// Validate addresses
 	addrs, err := s.addressRepo.GetByQuoteID(ctx, quoteID)
 	if err != nil {
-		return "", carterr.ErrPlaceOrderFailed
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrPlaceOrderFailed.Error()}},
+		}, nil
 	}
 
 	var hasShipping, hasBilling bool
@@ -813,7 +823,9 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 		if a.AddressType == "shipping" {
 			hasShipping = true
 			if a.ShippingMethod == nil || *a.ShippingMethod == "" {
-				return "", carterr.ErrShippingMethodMissing
+				return &model.PlaceOrderOutput{
+					Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrShippingMethodMissing.Error()}},
+				}, nil
 			}
 		}
 		if a.AddressType == "billing" {
@@ -822,22 +834,30 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 	}
 
 	if cart.IsVirtual != 1 && !hasShipping {
-		return "", carterr.ErrAddressInvalid
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrAddressInvalid.Error()}},
+		}, nil
 	}
 	if !hasBilling {
-		return "", carterr.ErrAddressInvalid
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrAddressInvalid.Error()}},
+		}, nil
 	}
 
 	// Validate payment
 	selectedPayment, err := s.paymentRepo.GetSelectedMethod(ctx, quoteID)
 	if err != nil || selectedPayment.Code == "" {
-		return "", carterr.ErrPaymentMissing
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrPaymentMissing.Error()}},
+		}, nil
 	}
 
 	// Validate guest email
 	if cart.CustomerID == nil || *cart.CustomerID == 0 {
 		if cart.CustomerEmail == nil || *cart.CustomerEmail == "" {
-			return "", carterr.ErrGuestEmailMissing
+			return &model.PlaceOrderOutput{
+				Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesGuestEmailMissing, Message: carterr.ErrGuestEmailMissing.Error()}},
+			}, nil
 		}
 	}
 
@@ -854,11 +874,16 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 	incrementID, err := s.orderRepo.PlaceOrder(ctx, cart, items, addrs, selectedPayment.Code, totalTax)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
-		return "", carterr.ErrPlaceOrderFailed
+		return &model.PlaceOrderOutput{
+			Errors: []*model.PlaceOrderError{{Code: model.PlaceOrderErrorCodesUnableToPlaceOrder, Message: carterr.ErrPlaceOrderFailed.Error()}},
+		}, nil
 	}
 
 	log.Info().Str("increment_id", incrementID).Int("quote_id", quoteID).Msg("order placed")
-	return incrementID, nil
+	return &model.PlaceOrderOutput{
+		Errors:  []*model.PlaceOrderError{},
+		OrderV2: &model.PlacedOrder{Number: incrementID},
+	}, nil
 }
 
 // ── Mapping ─────────────────────────────────────────────────────────────────

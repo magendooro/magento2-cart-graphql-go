@@ -270,12 +270,18 @@ type PaymentMethodInput struct {
 	Code string `json:"code"`
 }
 
+type PlaceOrderError struct {
+	Code    PlaceOrderErrorCodes `json:"code"`
+	Message string               `json:"message"`
+}
+
 type PlaceOrderInput struct {
 	CartID string `json:"cart_id"`
 }
 
 type PlaceOrderOutput struct {
-	OrderV2 *PlacedOrder `json:"orderV2,omitempty"`
+	Errors  []*PlaceOrderError `json:"errors"`
+	OrderV2 *PlacedOrder       `json:"orderV2,omitempty"`
 }
 
 type PlacedOrder struct {
@@ -692,6 +698,67 @@ func (e *CurrencyEnum) UnmarshalJSON(b []byte) error {
 }
 
 func (e CurrencyEnum) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type PlaceOrderErrorCodes string
+
+const (
+	PlaceOrderErrorCodesCartNotFound       PlaceOrderErrorCodes = "CART_NOT_FOUND"
+	PlaceOrderErrorCodesCartNotActive      PlaceOrderErrorCodes = "CART_NOT_ACTIVE"
+	PlaceOrderErrorCodesGuestEmailMissing  PlaceOrderErrorCodes = "GUEST_EMAIL_MISSING"
+	PlaceOrderErrorCodesUnableToPlaceOrder PlaceOrderErrorCodes = "UNABLE_TO_PLACE_ORDER"
+	PlaceOrderErrorCodesUndefined          PlaceOrderErrorCodes = "UNDEFINED"
+)
+
+var AllPlaceOrderErrorCodes = []PlaceOrderErrorCodes{
+	PlaceOrderErrorCodesCartNotFound,
+	PlaceOrderErrorCodesCartNotActive,
+	PlaceOrderErrorCodesGuestEmailMissing,
+	PlaceOrderErrorCodesUnableToPlaceOrder,
+	PlaceOrderErrorCodesUndefined,
+}
+
+func (e PlaceOrderErrorCodes) IsValid() bool {
+	switch e {
+	case PlaceOrderErrorCodesCartNotFound, PlaceOrderErrorCodesCartNotActive, PlaceOrderErrorCodesGuestEmailMissing, PlaceOrderErrorCodesUnableToPlaceOrder, PlaceOrderErrorCodesUndefined:
+		return true
+	}
+	return false
+}
+
+func (e PlaceOrderErrorCodes) String() string {
+	return string(e)
+}
+
+func (e *PlaceOrderErrorCodes) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = PlaceOrderErrorCodes(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid PlaceOrderErrorCodes", str)
+	}
+	return nil
+}
+
+func (e PlaceOrderErrorCodes) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *PlaceOrderErrorCodes) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e PlaceOrderErrorCodes) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

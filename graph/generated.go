@@ -205,7 +205,13 @@ type ComplexityRoot struct {
 		UpdateCartItems            func(childComplexity int, input *model.UpdateCartItemsInput) int
 	}
 
+	PlaceOrderError struct {
+		Code    func(childComplexity int) int
+		Message func(childComplexity int) int
+	}
+
 	PlaceOrderOutput struct {
+		Errors  func(childComplexity int) int
 		OrderV2 func(childComplexity int) int
 	}
 
@@ -1053,6 +1059,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.UpdateCartItems(childComplexity, args["input"].(*model.UpdateCartItemsInput)), true
 
+	case "PlaceOrderError.code":
+		if e.ComplexityRoot.PlaceOrderError.Code == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlaceOrderError.Code(childComplexity), true
+	case "PlaceOrderError.message":
+		if e.ComplexityRoot.PlaceOrderError.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlaceOrderError.Message(childComplexity), true
+
+	case "PlaceOrderOutput.errors":
+		if e.ComplexityRoot.PlaceOrderOutput.Errors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlaceOrderOutput.Errors(childComplexity), true
 	case "PlaceOrderOutput.orderV2":
 		if e.ComplexityRoot.PlaceOrderOutput.OrderV2 == nil {
 			break
@@ -5006,6 +5031,8 @@ func (ec *executionContext) fieldContext_Mutation_placeOrder(ctx context.Context
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
+			case "errors":
+				return ec.fieldContext_PlaceOrderOutput_errors(ctx, field)
 			case "orderV2":
 				return ec.fieldContext_PlaceOrderOutput_orderV2(ctx, field)
 			}
@@ -5350,6 +5377,99 @@ func (ec *executionContext) fieldContext_Mutation_estimateTotals(ctx context.Con
 	if fc.Args, err = ec.field_Mutation_estimateTotals_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlaceOrderError_code(ctx context.Context, field graphql.CollectedField, obj *model.PlaceOrderError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PlaceOrderError_code,
+		func(ctx context.Context) (any, error) {
+			return obj.Code, nil
+		},
+		nil,
+		ec.marshalNPlaceOrderErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorCodes,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PlaceOrderError_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlaceOrderError",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type PlaceOrderErrorCodes does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlaceOrderError_message(ctx context.Context, field graphql.CollectedField, obj *model.PlaceOrderError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PlaceOrderError_message,
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PlaceOrderError_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlaceOrderError",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlaceOrderOutput_errors(ctx context.Context, field graphql.CollectedField, obj *model.PlaceOrderOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PlaceOrderOutput_errors,
+		func(ctx context.Context) (any, error) {
+			return obj.Errors, nil
+		},
+		nil,
+		ec.marshalNPlaceOrderError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PlaceOrderOutput_errors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlaceOrderOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "code":
+				return ec.fieldContext_PlaceOrderError_code(ctx, field)
+			case "message":
+				return ec.fieldContext_PlaceOrderError_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PlaceOrderError", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -10733,6 +10853,50 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 	return out
 }
 
+var placeOrderErrorImplementors = []string{"PlaceOrderError"}
+
+func (ec *executionContext) _PlaceOrderError(ctx context.Context, sel ast.SelectionSet, obj *model.PlaceOrderError) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, placeOrderErrorImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PlaceOrderError")
+		case "code":
+			out.Values[i] = ec._PlaceOrderError_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._PlaceOrderError_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var placeOrderOutputImplementors = []string{"PlaceOrderOutput"}
 
 func (ec *executionContext) _PlaceOrderOutput(ctx context.Context, sel ast.SelectionSet, obj *model.PlaceOrderOutput) graphql.Marshaler {
@@ -10744,6 +10908,11 @@ func (ec *executionContext) _PlaceOrderOutput(ctx context.Context, sel ast.Selec
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("PlaceOrderOutput")
+		case "errors":
+			out.Values[i] = ec._PlaceOrderOutput_errors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "orderV2":
 			out.Values[i] = ec._PlaceOrderOutput_orderV2(ctx, field, obj)
 		default:
@@ -12154,6 +12323,42 @@ func (ec *executionContext) marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento
 func (ec *executionContext) unmarshalNPaymentMethodInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPaymentMethodInput(ctx context.Context, v any) (*model.PaymentMethodInput, error) {
 	res, err := ec.unmarshalInputPaymentMethodInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPlaceOrderError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PlaceOrderError) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNPlaceOrderError2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderError(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPlaceOrderError2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderError(ctx context.Context, sel ast.SelectionSet, v *model.PlaceOrderError) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PlaceOrderError(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPlaceOrderErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorCodes(ctx context.Context, v any) (model.PlaceOrderErrorCodes, error) {
+	var res model.PlaceOrderErrorCodes
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPlaceOrderErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorCodes(ctx context.Context, sel ast.SelectionSet, v model.PlaceOrderErrorCodes) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNSelectedBundleOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedBundleOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedBundleOption) graphql.Marshaler {
