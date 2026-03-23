@@ -11,6 +11,7 @@ import (
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
@@ -96,7 +97,7 @@ func (s *CartService) CreateEmptyCart(ctx context.Context) (string, error) {
 func (s *CartService) GetCart(ctx context.Context, maskedID string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	cart, err := s.cartRepo.GetByID(ctx, quoteID)
@@ -104,13 +105,13 @@ func (s *CartService) GetCart(ctx context.Context, maskedID string) (*model.Cart
 		return nil, err
 	}
 	if cart.IsActive != 1 {
-		return nil, fmt.Errorf("The cart isn't active.")
+		return nil, carterr.ErrCartNotActive
 	}
 
 	// Auth check: customer carts require matching customer
 	customerID := middleware.GetCustomerID(ctx)
 	if cart.CustomerID != nil && *cart.CustomerID > 0 && *cart.CustomerID != customerID {
-		return nil, fmt.Errorf("The current user cannot perform operations on cart \"%s\"", maskedID)
+		return nil, carterr.ErrCartForbidden(maskedID)
 	}
 
 	return s.mapCart(ctx, cart, maskedID)
@@ -120,7 +121,7 @@ func (s *CartService) GetCart(ctx context.Context, maskedID string) (*model.Cart
 func (s *CartService) GetCustomerCart(ctx context.Context) (*model.Cart, error) {
 	customerID := middleware.GetCustomerID(ctx)
 	if customerID == 0 {
-		return nil, fmt.Errorf("The current customer isn't authorized.")
+		return nil, carterr.ErrUnauthorized
 	}
 
 	storeID := middleware.GetStoreID(ctx)
@@ -149,7 +150,7 @@ func (s *CartService) GetCustomerCart(ctx context.Context) (*model.Cart, error) 
 func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []*model.CartItemInput) (*model.AddProductsToCartOutput, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	var userErrors []*model.CartUserInputError
@@ -187,7 +188,7 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		if err != nil {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeProductNotFound,
-				Message: fmt.Sprintf("Could not find a product with SKU \"%s\"", input.Sku),
+				Message: carterr.ErrProductNotFound(input.Sku).Error(),
 			})
 			continue
 		}
@@ -195,7 +196,7 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		if status != 1 {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeNotSalable,
-				Message: fmt.Sprintf("Product \"%s\" is not available for purchase.", input.Sku),
+				Message: carterr.ErrNotSalable(input.Sku).Error(),
 			})
 			continue
 		}
@@ -203,7 +204,7 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		if stockStatus != 1 {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeInsufficientStock,
-				Message: fmt.Sprintf("Product \"%s\" is out of stock.", input.Sku),
+				Message: carterr.ErrOutOfStock(input.Sku).Error(),
 			})
 			continue
 		}
@@ -233,7 +234,7 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 func (s *CartService) UpdateItems(ctx context.Context, maskedID string, items []*model.CartItemUpdateInput) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	for _, item := range items {
@@ -255,7 +256,7 @@ func (s *CartService) UpdateItems(ctx context.Context, maskedID string, items []
 func (s *CartService) RemoveItem(ctx context.Context, maskedID string, itemUID string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 	_ = quoteID
 
@@ -272,7 +273,7 @@ func (s *CartService) RemoveItem(ctx context.Context, maskedID string, itemUID s
 func (s *CartService) SetGuestEmail(ctx context.Context, maskedID, email string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 	s.cartRepo.UpdateEmail(ctx, quoteID, email)
 	return s.GetCart(ctx, maskedID)
@@ -346,7 +347,7 @@ func (s *CartService) collectTotals(ctx context.Context, cart *repository.CartDa
 func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string, addresses []*model.ShippingAddressInput) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	for _, addr := range addresses {
@@ -373,7 +374,7 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, input *model.BillingAddressInput) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	if input.SameAsShipping != nil && *input.SameAsShipping {
@@ -407,7 +408,7 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, methods []*model.ShippingMethodInput) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
@@ -429,7 +430,7 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 					}
 				}
 				if selectedRate == nil {
-					return nil, fmt.Errorf("Carrier with such method not found: %s_%s", method.CarrierCode, method.MethodCode)
+					return nil, carterr.ErrCarrierNotFound(method.CarrierCode + "_" + method.MethodCode)
 				}
 
 				desc := selectedRate.CarrierTitle + " - " + selectedRate.MethodTitle
@@ -449,27 +450,27 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return "", fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return "", carterr.ErrCartNotFound(maskedID)
 	}
 
 	cart, err := s.cartRepo.GetByID(ctx, quoteID)
 	if err != nil {
-		return "", fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return "", carterr.ErrCartNotFound(maskedID)
 	}
 	if cart.IsActive != 1 {
-		return "", fmt.Errorf("The cart isn't active.")
+		return "", carterr.ErrCartNotActive
 	}
 
 	// Validate items exist
 	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
 	if err != nil || len(items) == 0 {
-		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+		return "", carterr.ErrPlaceOrderFailed
 	}
 
 	// Validate addresses
 	addrs, err := s.addressRepo.GetByQuoteID(ctx, quoteID)
 	if err != nil {
-		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+		return "", carterr.ErrPlaceOrderFailed
 	}
 
 	var hasShipping, hasBilling bool
@@ -477,7 +478,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 		if a.AddressType == "shipping" {
 			hasShipping = true
 			if a.ShippingMethod == nil || *a.ShippingMethod == "" {
-				return "", fmt.Errorf("The shipping method is missing. Select the shipping method and try again.")
+				return "", carterr.ErrShippingMethodMissing
 			}
 		}
 		if a.AddressType == "billing" {
@@ -486,22 +487,22 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 	}
 
 	if cart.IsVirtual != 1 && !hasShipping {
-		return "", fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
+		return "", carterr.ErrAddressInvalid
 	}
 	if !hasBilling {
-		return "", fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
+		return "", carterr.ErrAddressInvalid
 	}
 
 	// Validate payment
 	selectedPayment, err := s.paymentRepo.GetSelectedMethod(ctx, quoteID)
 	if err != nil || selectedPayment.Code == "" {
-		return "", fmt.Errorf("Enter a valid payment method and try again.")
+		return "", carterr.ErrPaymentMissing
 	}
 
 	// Validate guest email
 	if cart.CustomerID == nil || *cart.CustomerID == 0 {
 		if cart.CustomerEmail == nil || *cart.CustomerEmail == "" {
-			return "", fmt.Errorf("Guest email for cart is missing.")
+			return "", carterr.ErrGuestEmailMissing
 		}
 	}
 
@@ -518,7 +519,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 	incrementID, err := s.orderRepo.PlaceOrder(ctx, cart, items, addrs, selectedPayment.Code, totalTax)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
-		return "", fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+		return "", carterr.ErrPlaceOrderFailed
 	}
 
 	log.Info().Str("increment_id", incrementID).Int("quote_id", quoteID).Msg("order placed")
@@ -531,7 +532,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (string, 
 func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, methodCode string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
 	// Validate method
@@ -546,7 +547,7 @@ func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, met
 		}
 	}
 	if !found {
-		return nil, fmt.Errorf("The requested Payment Method is not available.")
+		return nil, carterr.ErrPaymentNotAvailable
 	}
 
 	s.paymentRepo.SetPaymentMethod(ctx, quoteID, methodCode)
