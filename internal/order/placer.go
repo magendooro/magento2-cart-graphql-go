@@ -48,7 +48,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 			base_total_due, total_due, weight,
 			base_currency_code, order_currency_code, global_currency_code, store_currency_code,
 			base_to_global_rate, base_to_order_rate, store_to_base_rate, store_to_order_rate,
-			protect_code, send_email, created_at, updated_at
+			protect_code, send_email, remote_ip, created_at, updated_at
 		) VALUES (
 			'new', 'pending', ?, 'Main Website\nMain Website Store\nDefault Store View',
 			?, ?, ?, ?,
@@ -69,7 +69,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 			?, ?, 0,
 			?, ?, 'USD', 'USD',
 			1, 1, 0, 0,
-			?, 1, NOW(), NOW()
+			?, 1, ?, NOW(), NOW()
 		)`,
 		in.StoreID,
 		in.CustomerID, in.CustomerIsGuest, in.CustomerGroupID, in.CustomerEmail,
@@ -86,7 +86,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		in.TotalQty, in.TotalItemCount,
 		in.GrandTotal, in.GrandTotal,
 		in.BaseCurrencyCode, in.OrderCurrencyCode,
-		generateProtectCode(),
+		generateProtectCode(), in.RemoteIP,
 	)
 	if err != nil {
 		return "", fmt.Errorf("insert sales_order: %w", err)
