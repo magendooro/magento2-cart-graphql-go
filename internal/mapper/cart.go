@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
+
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
@@ -158,7 +161,7 @@ func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartA
 		Postcode:  a.Postcode,
 		Company:   a.Company,
 		Telephone: a.Telephone,
-		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: a.CountryID},
+		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: countryLabel(a.CountryID)},
 	}
 	if a.RegionID != nil {
 		code, name, err := m.addressRepo.ResolveRegion(ctx, *a.RegionID)
@@ -208,7 +211,7 @@ func (m *CartMapper) MapBillingAddress(ctx context.Context, a *repository.CartAd
 		Postcode:  a.Postcode,
 		Company:   a.Company,
 		Telephone: a.Telephone,
-		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: a.CountryID},
+		Country:   &model.CartAddressCountry{Code: a.CountryID, Label: countryLabel(a.CountryID)},
 	}
 	if a.RegionID != nil {
 		code, name, err := m.addressRepo.ResolveRegion(ctx, *a.RegionID)
@@ -451,6 +454,20 @@ func itemRowTotalInclTax(itemID int, rowTotal float64, taxIncludedInPrice bool, 
 		}
 	}
 	return rowTotal
+}
+
+// countryLabel returns the English display name for an ISO 3166-1 alpha-2 country
+// code (e.g. "US" → "United States"). Falls back to the code on unknown input.
+func countryLabel(code string) string {
+	region, err := language.ParseRegion(code)
+	if err != nil {
+		return code
+	}
+	name := display.English.Regions().Name(region)
+	if name == "" {
+		return code
+	}
+	return name
 }
 
 // subtotalExclTax returns a pointer to the tax-exclusive subtotal.
