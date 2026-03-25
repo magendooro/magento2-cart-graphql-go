@@ -75,8 +75,9 @@ type OrderItemInput struct {
 	TaxAmount       float64
 	DiscountPercent float64
 	DiscountAmount  float64
-	IsVirtual       int
-	StoreID         int
+	IsVirtual      int
+	StoreID        int
+	ProductOptions string // JSON blob for sales_order_item.product_options; empty = NULL
 }
 
 // OrderAddressInput mirrors the fields written to sales_order_address.

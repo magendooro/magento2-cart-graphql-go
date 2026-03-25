@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -697,6 +698,10 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	}
 
 	orderIn := order.CartToOrder(cart, items, addrs, payment.Code, orderTotals)
+	// Attach product_options JSON to each order item
+	for i := range orderIn.Items {
+		orderIn.Items[i].ProductOptions = repository.BuildProductOptionsJSON(ctx, s.orderRepo.DB(), items[i], items)
+	}
 	incrementID, err := order.Place(ctx, s.orderRepo.DB(), orderIn)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
@@ -957,6 +962,12 @@ func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, store
 	if err != nil {
 		return fmt.Errorf("Could not add \"%s\" to cart: %v", input.Sku, err)
 	}
+	// Store selected options so product_options can be built at order placement time
+	attrsJSON, _ := jsonMarshalAttrs(superAttributes)
+	buyRequestJSON := buildBuyRequestJSON(input.Quantity, superAttributes)
+	s.itemRepo.WriteItemOption(ctx, parentItemID, parent.ProductID, "attributes", attrsJSON)
+	s.itemRepo.WriteItemOption(ctx, parentItemID, parent.ProductID, "info_buyRequest", buyRequestJSON)
+	s.itemRepo.WriteItemOption(ctx, parentItemID, parent.ProductID, "simple_product", strconv.Itoa(matchedChild.productID))
 	return nil
 }
 
@@ -1046,3 +1057,32 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, cu
 	return nil
 }
 
+
+// jsonMarshalAttrs encodes a map[attrID]optionID as a JSON string map ({"142":"166",...}).
+func jsonMarshalAttrs(superAttributes map[int]int) (string, error) {
+	m := make(map[string]string, len(superAttributes))
+	for k, v := range superAttributes {
+		m[strconv.Itoa(k)] = strconv.Itoa(v)
+	}
+	b, err := json.Marshal(m)
+	return string(b), err
+}
+
+// buildBuyRequestJSON builds the info_buyRequest JSON for a configurable item.
+func buildBuyRequestJSON(qty float64, superAttributes map[int]int) string {
+	superAttr := make(map[string]string, len(superAttributes))
+	for k, v := range superAttributes {
+		superAttr[strconv.Itoa(k)] = strconv.Itoa(v)
+	}
+	type buyReq struct {
+		Qty            float64           `json:"qty"`
+		SuperAttribute map[string]string `json:"super_attribute"`
+		Options        []interface{}     `json:"options"`
+	}
+	b, _ := json.Marshal(buyReq{
+		Qty:            qty,
+		SuperAttribute: superAttr,
+		Options:        []interface{}{},
+	})
+	return string(b)
+}

@@ -239,6 +239,10 @@ func insertOrderItem(ctx context.Context, tx *sql.Tx, orderID int64, parentOrder
 	if parentOrderItemID != 0 {
 		parentID = parentOrderItemID
 	}
+	var productOptionsArg interface{}
+	if item.ProductOptions != "" {
+		productOptionsArg = item.ProductOptions
+	}
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO sales_order_item (
 			order_id, parent_item_id, quote_item_id,
@@ -250,7 +254,7 @@ func insertOrderItem(ctx context.Context, tx *sql.Tx, orderID int64, parentOrder
 			tax_percent, tax_amount, base_tax_amount,
 			discount_percent, discount_amount, base_discount_amount,
 			discount_tax_compensation_amount, base_discount_tax_compensation_amount,
-			is_virtual, store_id, created_at, updated_at
+			is_virtual, store_id, product_options, created_at, updated_at
 		) VALUES (
 			?, ?, ?,
 			?, ?, ?, ?,
@@ -261,7 +265,7 @@ func insertOrderItem(ctx context.Context, tx *sql.Tx, orderID int64, parentOrder
 			?, ?, ?,
 			?, ?, ?,
 			0, 0,
-			0, ?, NOW(), NOW()
+			0, ?, ?, NOW(), NOW()
 		)`,
 		orderID, parentID, item.QuoteItemID,
 		item.ProductID, item.ProductType, item.SKU, item.Name,
@@ -271,7 +275,7 @@ func insertOrderItem(ctx context.Context, tx *sql.Tx, orderID int64, parentOrder
 		item.RowTotalInclTax, item.RowTotalInclTax,
 		item.TaxPercent, item.TaxAmount, item.TaxAmount,
 		item.DiscountPercent, item.DiscountAmount, item.DiscountAmount,
-		item.StoreID,
+		item.StoreID, productOptionsArg,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert order item %s: %w", item.SKU, err)
