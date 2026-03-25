@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -267,6 +268,23 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 	}
 
 	for _, addr := range addresses {
+		if addr.CustomerAddressID != nil {
+			customerID := middleware.GetCustomerID(ctx)
+			if customerID == 0 {
+				return nil, mgerrors.ErrUnauthorized
+			}
+			ca, err := s.loadCustomerAddress(ctx, *addr.CustomerAddressID, customerID)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := s.addressRepo.SetAddress(ctx, quoteID, "shipping",
+				ca.Firstname, ca.Lastname, ca.City, ca.CountryID, ca.Street,
+				ca.Company, ca.Region, ca.Postcode, ca.Telephone, ca.RegionID,
+			); err != nil {
+				return nil, fmt.Errorf("failed to set shipping address: %w", err)
+			}
+			continue
+		}
 		if addr.Address == nil {
 			continue
 		}
@@ -292,7 +310,8 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
-	if input.SameAsShipping != nil && *input.SameAsShipping {
+	switch {
+	case input.SameAsShipping != nil && *input.SameAsShipping:
 		addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
 		for _, a := range addrs {
 			if a.AddressType == "shipping" {
@@ -304,13 +323,27 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 				break
 			}
 		}
-	} else if input.Address != nil {
+	case input.CustomerAddressID != nil:
+		customerID := middleware.GetCustomerID(ctx)
+		if customerID == 0 {
+			return nil, mgerrors.ErrUnauthorized
+		}
+		ca, err := s.loadCustomerAddress(ctx, *input.CustomerAddressID, customerID)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
+			ca.Firstname, ca.Lastname, ca.City, ca.CountryID, ca.Street,
+			ca.Company, ca.Region, ca.Postcode, ca.Telephone, ca.RegionID,
+		); err != nil {
+			return nil, fmt.Errorf("failed to set billing address: %w", err)
+		}
+	case input.Address != nil:
 		a := input.Address
-		_, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
+		if _, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
 			a.Firstname, a.Lastname, a.City, a.CountryCode, a.Street,
 			a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
-		)
-		if err != nil {
+		); err != nil {
 			return nil, fmt.Errorf("Failed to set billing address: %w", err)
 		}
 	}
@@ -1071,6 +1104,60 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, cu
 	return nil
 }
 
+
+// ── Customer address lookup ───────────────────────────────────────────────────
+
+type customerAddrFields struct {
+	Firstname, Lastname, City, CountryID string
+	Street                               []string
+	Company, Region, Postcode, Telephone *string
+	RegionID                             *int
+}
+
+// loadCustomerAddress fetches a saved address from customer_address_entity.
+// customerID is used for ownership verification.
+func (s *CartService) loadCustomerAddress(ctx context.Context, addressID, customerID int) (*customerAddrFields, error) {
+	var companyVal, regionVal, postcodeVal, telephoneVal sql.NullString
+	var regionIDVal sql.NullInt32
+	var streetRaw string
+	var f customerAddrFields
+
+	err := s.cartRepo.DB().QueryRowContext(ctx, `
+		SELECT firstname, lastname, company, street, city, region, region_id, postcode, country_id, telephone
+		FROM customer_address_entity
+		WHERE entity_id = ? AND parent_id = ? AND is_active = 1`,
+		addressID, customerID,
+	).Scan(
+		&f.Firstname, &f.Lastname, &companyVal, &streetRaw,
+		&f.City, &regionVal, &regionIDVal, &postcodeVal,
+		&f.CountryID, &telephoneVal,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("Address %d is not found.", addressID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load customer address: %w", err)
+	}
+
+	f.Street = strings.Split(streetRaw, "\n")
+	if companyVal.Valid {
+		f.Company = &companyVal.String
+	}
+	if regionVal.Valid {
+		f.Region = &regionVal.String
+	}
+	if postcodeVal.Valid {
+		f.Postcode = &postcodeVal.String
+	}
+	if telephoneVal.Valid {
+		f.Telephone = &telephoneVal.String
+	}
+	if regionIDVal.Valid {
+		v := int(regionIDVal.Int32)
+		f.RegionID = &v
+	}
+	return &f, nil
+}
 
 // jsonMarshalAttrs encodes a map[attrID]optionID as a JSON string map ({"142":"166",...}).
 func jsonMarshalAttrs(superAttributes map[int]int) (string, error) {
