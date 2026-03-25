@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
+	"github.com/magendooro/magento2-go-common/middleware"
 )
 
 // ItemsV2 is the resolver for the itemsV2 field.
@@ -278,6 +279,39 @@ func (r *queryResolver) Cart(ctx context.Context, cartID string) (*model.Cart, e
 // CustomerCart is the resolver for the customerCart field.
 func (r *queryResolver) CustomerCart(ctx context.Context) (*model.Cart, error) {
 	return r.CartService.GetCustomerCart(ctx)
+}
+
+// CheckoutAgreements is the resolver for the checkoutAgreements field.
+// Returns empty list if checkout/options/enable_agreements is disabled (Magento default).
+func (r *queryResolver) CheckoutAgreements(ctx context.Context) ([]*model.CheckoutAgreement, error) {
+	storeID := middleware.GetStoreID(ctx)
+
+	if r.ConfigProvider.GetInt("checkout/options/enable_agreements", storeID, 0) == 0 {
+		return []*model.CheckoutAgreement{}, nil
+	}
+
+	rows, err := r.AgreementRepo.GetActiveByStore(ctx, storeID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.CheckoutAgreement, 0, len(rows))
+	for _, row := range rows {
+		mode := model.CheckoutAgreementModeManual
+		if row.Mode == 0 {
+			mode = model.CheckoutAgreementModeAuto
+		}
+		result = append(result, &model.CheckoutAgreement{
+			AgreementID:   row.AgreementID,
+			Name:          row.Name,
+			Content:       row.Content,
+			ContentHeight: row.ContentHeight,
+			CheckboxText:  row.CheckboxText,
+			IsHTML:        row.IsHTML,
+			Mode:          mode,
+		})
+	}
+	return result, nil
 }
 
 // Cart returns CartResolver implementation.

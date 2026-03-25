@@ -12,8 +12,10 @@ import (
 )
 
 type Resolver struct {
-	CartService   *service.CartService
-	TokenResolver *middleware.TokenResolver
+	CartService       *service.CartService
+	AgreementRepo     *repository.CheckoutAgreementRepository
+	ConfigProvider    *config.ConfigProvider
+	TokenResolver     *middleware.TokenResolver
 }
 
 func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
@@ -38,8 +40,11 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 	)
 
 	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, shippingRegistry, paymentRepo, taxRepo, orderRepo, couponRepo, cp)
+	agreementRepo := repository.NewCheckoutAgreementRepository(db)
 
 	return &Resolver{
-		CartService: cartService,
+		CartService:    cartService,
+		AgreementRepo:  agreementRepo,
+		ConfigProvider: cp,
 	}, nil
 }

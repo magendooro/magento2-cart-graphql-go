@@ -253,6 +253,17 @@ type CartUserInputError struct {
 	Message string                 `json:"message"`
 }
 
+// A single Terms and Conditions agreement that must be accepted before checkout.
+type CheckoutAgreement struct {
+	AgreementID   int                   `json:"agreement_id"`
+	Name          string                `json:"name"`
+	Content       string                `json:"content"`
+	ContentHeight *string               `json:"content_height,omitempty"`
+	CheckboxText  string                `json:"checkbox_text"`
+	IsHTML        bool                  `json:"is_html"`
+	Mode          CheckoutAgreementMode `json:"mode"`
+}
+
 type CheckoutUserInputError struct {
 	Code    CheckoutUserInputErrorCodes `json:"code"`
 	Message string                      `json:"message"`
@@ -687,6 +698,64 @@ func (e *CartUserInputErrorType) UnmarshalJSON(b []byte) error {
 }
 
 func (e CartUserInputErrorType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How the checkout agreement acceptance is handled.
+type CheckoutAgreementMode string
+
+const (
+	// Acceptance is recorded automatically.
+	CheckoutAgreementModeAuto CheckoutAgreementMode = "AUTO"
+	// The customer must manually check a checkbox.
+	CheckoutAgreementModeManual CheckoutAgreementMode = "MANUAL"
+)
+
+var AllCheckoutAgreementMode = []CheckoutAgreementMode{
+	CheckoutAgreementModeAuto,
+	CheckoutAgreementModeManual,
+}
+
+func (e CheckoutAgreementMode) IsValid() bool {
+	switch e {
+	case CheckoutAgreementModeAuto, CheckoutAgreementModeManual:
+		return true
+	}
+	return false
+}
+
+func (e CheckoutAgreementMode) String() string {
+	return string(e)
+}
+
+func (e *CheckoutAgreementMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CheckoutAgreementMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CheckoutAgreementMode", str)
+	}
+	return nil
+}
+
+func (e CheckoutAgreementMode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CheckoutAgreementMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CheckoutAgreementMode) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

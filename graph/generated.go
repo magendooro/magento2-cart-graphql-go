@@ -187,6 +187,16 @@ type ComplexityRoot struct {
 		Message func(childComplexity int) int
 	}
 
+	CheckoutAgreement struct {
+		AgreementID   func(childComplexity int) int
+		CheckboxText  func(childComplexity int) int
+		Content       func(childComplexity int) int
+		ContentHeight func(childComplexity int) int
+		IsHTML        func(childComplexity int) int
+		Mode          func(childComplexity int) int
+		Name          func(childComplexity int) int
+	}
+
 	CheckoutUserInputError struct {
 		Code    func(childComplexity int) int
 		Message func(childComplexity int) int
@@ -268,8 +278,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Cart         func(childComplexity int, cartID string) int
-		CustomerCart func(childComplexity int) int
+		Cart               func(childComplexity int, cartID string) int
+		CheckoutAgreements func(childComplexity int) int
+		CustomerCart       func(childComplexity int) int
 	}
 
 	RemoveCouponFromCartOutput struct {
@@ -423,6 +434,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	Cart(ctx context.Context, cartID string) (*model.Cart, error)
 	CustomerCart(ctx context.Context) (*model.Cart, error)
+	CheckoutAgreements(ctx context.Context) ([]*model.CheckoutAgreement, error)
 }
 
 type executableSchema graphql.ExecutableSchemaState[ResolverRoot, DirectiveRoot, ComplexityRoot]
@@ -953,6 +965,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CartUserInputError.Message(childComplexity), true
 
+	case "CheckoutAgreement.agreement_id":
+		if e.ComplexityRoot.CheckoutAgreement.AgreementID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.AgreementID(childComplexity), true
+	case "CheckoutAgreement.checkbox_text":
+		if e.ComplexityRoot.CheckoutAgreement.CheckboxText == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.CheckboxText(childComplexity), true
+	case "CheckoutAgreement.content":
+		if e.ComplexityRoot.CheckoutAgreement.Content == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.Content(childComplexity), true
+	case "CheckoutAgreement.content_height":
+		if e.ComplexityRoot.CheckoutAgreement.ContentHeight == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.ContentHeight(childComplexity), true
+	case "CheckoutAgreement.is_html":
+		if e.ComplexityRoot.CheckoutAgreement.IsHTML == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.IsHTML(childComplexity), true
+	case "CheckoutAgreement.mode":
+		if e.ComplexityRoot.CheckoutAgreement.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.Mode(childComplexity), true
+	case "CheckoutAgreement.name":
+		if e.ComplexityRoot.CheckoutAgreement.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutAgreement.Name(childComplexity), true
+
 	case "CheckoutUserInputError.code":
 		if e.ComplexityRoot.CheckoutUserInputError.Code == nil {
 			break
@@ -1384,6 +1439,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Cart(childComplexity, args["cart_id"].(string)), true
+	case "Query.checkoutAgreements":
+		if e.ComplexityRoot.Query.CheckoutAgreements == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.CheckoutAgreements(childComplexity), true
 	case "Query.customerCart":
 		if e.ComplexityRoot.Query.CustomerCart == nil {
 			break
@@ -5046,6 +5107,209 @@ func (ec *executionContext) fieldContext_CartUserInputError_message(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _CheckoutAgreement_agreement_id(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_agreement_id,
+		func(ctx context.Context) (any, error) {
+			return obj.AgreementID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_agreement_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_name(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_content(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_content,
+		func(ctx context.Context) (any, error) {
+			return obj.Content, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_content_height(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_content_height,
+		func(ctx context.Context) (any, error) {
+			return obj.ContentHeight, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_content_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_checkbox_text(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_checkbox_text,
+		func(ctx context.Context) (any, error) {
+			return obj.CheckboxText, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_checkbox_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_is_html(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_is_html,
+		func(ctx context.Context) (any, error) {
+			return obj.IsHTML, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_is_html(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutAgreement_mode(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutAgreement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutAgreement_mode,
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		ec.marshalNCheckoutAgreementMode2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreementMode,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutAgreement_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutAgreement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type CheckoutAgreementMode does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CheckoutUserInputError_code(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutUserInputError) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7173,6 +7437,51 @@ func (ec *executionContext) fieldContext_Query_customerCart(_ context.Context, f
 				return ec.fieldContext_Cart_prices(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_checkoutAgreements(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_checkoutAgreements,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().CheckoutAgreements(ctx)
+		},
+		nil,
+		ec.marshalOCheckoutAgreement2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreement,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_checkoutAgreements(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "agreement_id":
+				return ec.fieldContext_CheckoutAgreement_agreement_id(ctx, field)
+			case "name":
+				return ec.fieldContext_CheckoutAgreement_name(ctx, field)
+			case "content":
+				return ec.fieldContext_CheckoutAgreement_content(ctx, field)
+			case "content_height":
+				return ec.fieldContext_CheckoutAgreement_content_height(ctx, field)
+			case "checkbox_text":
+				return ec.fieldContext_CheckoutAgreement_checkbox_text(ctx, field)
+			case "is_html":
+				return ec.fieldContext_CheckoutAgreement_is_html(ctx, field)
+			case "mode":
+				return ec.fieldContext_CheckoutAgreement_mode(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CheckoutAgreement", field.Name)
 		},
 	}
 	return fc, nil
@@ -13429,6 +13738,72 @@ func (ec *executionContext) _CartUserInputError(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var checkoutAgreementImplementors = []string{"CheckoutAgreement"}
+
+func (ec *executionContext) _CheckoutAgreement(ctx context.Context, sel ast.SelectionSet, obj *model.CheckoutAgreement) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, checkoutAgreementImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CheckoutAgreement")
+		case "agreement_id":
+			out.Values[i] = ec._CheckoutAgreement_agreement_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CheckoutAgreement_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "content":
+			out.Values[i] = ec._CheckoutAgreement_content(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "content_height":
+			out.Values[i] = ec._CheckoutAgreement_content_height(ctx, field, obj)
+		case "checkbox_text":
+			out.Values[i] = ec._CheckoutAgreement_checkbox_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "is_html":
+			out.Values[i] = ec._CheckoutAgreement_is_html(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._CheckoutAgreement_mode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var checkoutUserInputErrorImplementors = []string{"CheckoutUserInputError"}
 
 func (ec *executionContext) _CheckoutUserInputError(ctx context.Context, sel ast.SelectionSet, obj *model.CheckoutUserInputError) graphql.Marshaler {
@@ -14026,6 +14401,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "checkoutAgreements":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_checkoutAgreements(ctx, field)
 				return res
 			}
 
@@ -15543,6 +15937,16 @@ func (ec *executionContext) marshalNCartUserInputErrorType2githubᚗcomᚋmagend
 	return v
 }
 
+func (ec *executionContext) unmarshalNCheckoutAgreementMode2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreementMode(ctx context.Context, v any) (model.CheckoutAgreementMode, error) {
+	var res model.CheckoutAgreementMode
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCheckoutAgreementMode2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreementMode(ctx context.Context, sel ast.SelectionSet, v model.CheckoutAgreementMode) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNCheckoutUserInputError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CheckoutUserInputError) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -16477,6 +16881,26 @@ func (ec *executionContext) marshalOCartTaxItem2ᚖgithubᚗcomᚋmagendooroᚋm
 		return graphql.Null
 	}
 	return ec._CartTaxItem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCheckoutAgreement2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreement(ctx context.Context, sel ast.SelectionSet, v []*model.CheckoutAgreement) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalOCheckoutAgreement2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreement(ctx, sel, v[i])
+	})
+
+	return ret
+}
+
+func (ec *executionContext) marshalOCheckoutAgreement2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutAgreement(ctx context.Context, sel ast.SelectionSet, v *model.CheckoutAgreement) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CheckoutAgreement(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOCreateGuestCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateGuestCartInput(ctx context.Context, v any) (*model.CreateGuestCartInput, error) {
