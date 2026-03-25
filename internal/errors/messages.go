@@ -37,7 +37,10 @@ var (
 )
 
 // Address errors
-var ErrAddressInvalid = fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
+var (
+	ErrAddressInvalid      = fmt.Errorf("Some addresses can't be used due to the configurations for specific countries.")
+	ErrBillingAddressMissing = fmt.Errorf("Please check the billing address information.")
+)
 
 // Payment errors
 var (

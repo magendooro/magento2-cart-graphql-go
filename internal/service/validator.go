@@ -35,7 +35,7 @@ func validateForOrder(
 		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrAddressInvalid.Error())
 	}
 	if !hasBilling {
-		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrAddressInvalid.Error())
+		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrBillingAddressMissing.Error())
 	}
 
 	if payment == nil || payment.Code == "" {

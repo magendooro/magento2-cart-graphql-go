@@ -465,6 +465,10 @@ func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, met
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return nil, err
+	}
+
 	storeID := middleware.GetStoreID(ctx)
 	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
 	available := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
@@ -806,6 +810,11 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	}
 	if cart.IsActive != 1 {
 		return orderErr(model.PlaceOrderErrorCodesCartNotActive, carterr.ErrCartNotActive.Error()), nil
+	}
+
+	// Mirrors GetCartForCheckout: check guest checkout allowance before placement
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, err.Error()), nil
 	}
 
 	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
