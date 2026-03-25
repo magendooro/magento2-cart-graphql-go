@@ -71,13 +71,15 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 		thumbs[productID] = &model.CartItemProductImage{URL: &url}
 	}
 
+	urlKeys := m.loadURLKeys(ctx, productIDs)
+
 	cartItems := make([]model.CartItemInterface, 0, len(in.Items))
 	for _, item := range in.Items {
 		if item.ParentItemID != nil {
 			continue
 		}
 		rowTotalInclTax := itemRowTotalInclTax(item.ItemID, item.RowTotal, taxIncludedInPrice, in.DisplayTotals)
-		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency, rowTotalInclTax, thumbs))
+		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency, rowTotalInclTax, thumbs, urlKeys))
 	}
 
 	// Applied taxes
@@ -113,9 +115,11 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 		if in.Cart.CouponCode != nil && *in.Cart.CouponCode != "" {
 			label = *in.Cart.CouponCode
 		}
+		wholeCart := model.DiscountAppliedToTypeWholeCart
 		discounts = append(discounts, &model.Discount{
-			Amount: &model.Money{Value: &discountAmount, Currency: &currency},
-			Label:  label,
+			Amount:    &model.Money{Value: &discountAmount, Currency: &currency},
+			Label:     label,
+			AppliedTo: &wholeCart,
 		})
 	}
 
@@ -195,23 +199,29 @@ func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartA
 			if a.ShippingDescription != nil {
 				desc = *a.ShippingDescription
 			}
+			shippingMoney := &model.Money{Value: &a.ShippingAmount, Currency: nil}
 			addr.SelectedShippingMethod = &model.SelectedShippingMethod{
 				CarrierCode:  parts[0],
 				CarrierTitle: parts[0],
 				MethodCode:   parts[1],
 				MethodTitle:  desc,
-				Amount:       &model.Money{Value: &a.ShippingAmount, Currency: nil},
+				Amount:       shippingMoney,
+				PriceExclTax: shippingMoney,
+				PriceInclTax: shippingMoney,
 			}
 		}
 	}
 	for _, r := range rates {
 		price := r.Price
+		priceMoney := &model.Money{Value: &price, Currency: &currency}
 		addr.AvailableShippingMethods = append(addr.AvailableShippingMethods, &model.AvailableShippingMethod{
 			CarrierCode:  r.CarrierCode,
 			CarrierTitle: r.CarrierTitle,
 			MethodCode:   r.MethodCode,
 			MethodTitle:  r.MethodTitle,
-			Amount:       &model.Money{Value: &price, Currency: &currency},
+			Amount:       priceMoney,
+			PriceExclTax: priceMoney,
+			PriceInclTax: priceMoney,
 			Available:    true,
 		})
 	}
@@ -242,7 +252,7 @@ func (m *CartMapper) MapBillingAddress(ctx context.Context, a *repository.CartAd
 // MapCartItem converts a CartItemData into the appropriate GraphQL cart item interface.
 // rowTotalInclTax must be pre-computed by the caller (MapCart) from the pipeline totals.
 // thumbs is a map of productID → thumbnail image (may be nil or empty).
-func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum, rowTotalInclTax float64, thumbs map[int]*model.CartItemProductImage) model.CartItemInterface {
+func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum, rowTotalInclTax float64, thumbs map[int]*model.CartItemProductImage, urlKeys map[int]string) model.CartItemInterface {
 	uid := EncodeUID(item.ItemID)
 	prices := &model.CartItemPrices{
 		Price:                &model.Money{Value: &item.Price, Currency: &currency},
@@ -250,25 +260,33 @@ func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemD
 		RowTotalIncludingTax: &model.Money{Value: &rowTotalInclTax, Currency: &currency},
 	}
 	if item.DiscountAmount > 0 {
+		itemDiscount := model.DiscountAppliedToTypeItem
 		prices.TotalItemDiscount = &model.Money{Value: &item.DiscountAmount, Currency: &currency}
 		prices.Discounts = []*model.Discount{{
-			Amount: &model.Money{Value: &item.DiscountAmount, Currency: &currency},
-			Label:  "Discount",
+			Amount:    &model.Money{Value: &item.DiscountAmount, Currency: &currency},
+			Label:     "Discount",
+			AppliedTo: &itemDiscount,
 		}}
 	}
 
 	switch item.ProductType {
 	case "configurable":
-		return m.mapConfigurableItem(ctx, item, allItems, uid, prices, currency, thumbs)
+		return m.mapConfigurableItem(ctx, item, allItems, uid, prices, currency, thumbs, urlKeys)
 	case "bundle":
-		return m.mapBundleItem(ctx, item, allItems, uid, prices, currency, thumbs)
+		return m.mapBundleItem(ctx, item, allItems, uid, prices, currency, thumbs, urlKeys)
 	default:
+		urlKey := urlKeys[item.ProductID]
+		var urlKeyPtr *string
+		if urlKey != "" {
+			urlKeyPtr = &urlKey
+		}
 		return &model.SimpleCartItem{
 			UID:      uid,
 			Quantity: item.Qty,
 			Product: &model.CartItemProduct{
 				Sku:       item.SKU,
 				Name:      &item.Name,
+				URLKey:    urlKeyPtr,
 				Thumbnail: thumbs[item.ProductID],
 			},
 			Prices: prices,
@@ -276,7 +294,7 @@ func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemD
 	}
 }
 
-func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage) *model.ConfigurableCartItem {
+func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage, urlKeys map[int]string) *model.ConfigurableCartItem {
 	// Find the parent product's original SKU
 	var parentSKU string
 	m.db.QueryRowContext(ctx,
@@ -337,28 +355,40 @@ func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.C
 		}
 	}
 
+	parentURLKey := urlKeys[item.ProductID]
+	var parentURLKeyPtr *string
+	if parentURLKey != "" {
+		parentURLKeyPtr = &parentURLKey
+	}
 	result := &model.ConfigurableCartItem{
 		UID:      uid,
 		Quantity: item.Qty,
 		Product: &model.CartItemProduct{
 			Sku:       parentSKU,
 			Name:      &item.Name,
+			URLKey:    parentURLKeyPtr,
 			Thumbnail: thumbs[item.ProductID],
 		},
 		Prices:              prices,
 		ConfigurableOptions: configOptions,
 	}
 	if childItem != nil {
+		childURLKey := urlKeys[childItem.ProductID]
+		var childURLKeyPtr *string
+		if childURLKey != "" {
+			childURLKeyPtr = &childURLKey
+		}
 		result.ConfiguredVariant = &model.CartItemProduct{
 			Sku:       childItem.SKU,
 			Name:      &childItem.Name,
+			URLKey:    childURLKeyPtr,
 			Thumbnail: thumbs[childItem.ProductID],
 		}
 	}
 	return result
 }
 
-func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage) *model.BundleCartItem {
+func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage, urlKeys map[int]string) *model.BundleCartItem {
 	// Find child items
 	var childItems []*repository.CartItemData
 	for _, ci := range allItems {
@@ -427,12 +457,18 @@ func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartIte
 		item.ProductID,
 	).Scan(&parentSKU)
 
+	bundleURLKey := urlKeys[item.ProductID]
+	var bundleURLKeyPtr *string
+	if bundleURLKey != "" {
+		bundleURLKeyPtr = &bundleURLKey
+	}
 	return &model.BundleCartItem{
 		UID:      uid,
 		Quantity: item.Qty,
 		Product: &model.CartItemProduct{
 			Sku:       parentSKU,
 			Name:      &item.Name,
+			URLKey:    bundleURLKeyPtr,
 			Thumbnail: thumbs[item.ProductID],
 		},
 		Prices:        prices,
@@ -463,6 +499,47 @@ func (m *CartMapper) loadThumbnails(ctx context.Context, productIDs []int) map[i
 		  AND store_id = 0
 		  AND entity_id IN (%s)
 		  AND value IS NOT NULL AND value != 'no_selection'`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := m.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	result := make(map[int]string, len(productIDs))
+	for rows.Next() {
+		var entityID int
+		var value string
+		if rows.Scan(&entityID, &value) == nil {
+			result[entityID] = value
+		}
+	}
+	return result
+}
+
+// loadURLKeys batch-loads the url_key EAV attribute for the given product IDs.
+// Returns a map of productID → url_key string (e.g. "my-product").
+// On any DB error the empty map is returned.
+func (m *CartMapper) loadURLKeys(ctx context.Context, productIDs []int) map[int]string {
+	if len(productIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(productIDs))
+	args := make([]interface{}, len(productIDs))
+	for i, id := range productIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf(`
+		SELECT entity_id, value
+		FROM catalog_product_entity_varchar
+		WHERE attribute_id = (
+			SELECT attribute_id FROM eav_attribute
+			WHERE attribute_code = 'url_key' AND entity_type_id = 4
+		)
+		  AND store_id = 0
+		  AND entity_id IN (%s)
+		  AND value IS NOT NULL`,
 		strings.Join(placeholders, ","),
 	)
 	rows, err := m.db.QueryContext(ctx, query, args...)

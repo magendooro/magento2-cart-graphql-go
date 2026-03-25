@@ -36,9 +36,25 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	AddBundleProductsToCartOutput struct {
+		Cart func(childComplexity int) int
+	}
+
+	AddConfigurableProductsToCartOutput struct {
+		Cart func(childComplexity int) int
+	}
+
 	AddProductsToCartOutput struct {
 		Cart       func(childComplexity int) int
 		UserErrors func(childComplexity int) int
+	}
+
+	AddSimpleProductsToCartOutput struct {
+		Cart func(childComplexity int) int
+	}
+
+	AddVirtualProductsToCartOutput struct {
+		Cart func(childComplexity int) int
 	}
 
 	AppliedCoupon struct {
@@ -59,8 +75,11 @@ type ComplexityRoot struct {
 		Available    func(childComplexity int) int
 		CarrierCode  func(childComplexity int) int
 		CarrierTitle func(childComplexity int) int
+		ErrorMessage func(childComplexity int) int
 		MethodCode   func(childComplexity int) int
 		MethodTitle  func(childComplexity int) int
+		PriceExclTax func(childComplexity int) int
+		PriceInclTax func(childComplexity int) int
 	}
 
 	BillingCartAddress struct {
@@ -174,8 +193,9 @@ type ComplexityRoot struct {
 	}
 
 	Discount struct {
-		Amount func(childComplexity int) int
-		Label  func(childComplexity int) int
+		Amount    func(childComplexity int) int
+		AppliedTo func(childComplexity int) int
+		Label     func(childComplexity int) int
 	}
 
 	EstimateTotalsOutput struct {
@@ -192,24 +212,28 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddProductsToCart          func(childComplexity int, cartID string, cartItems []*model.CartItemInput) int
-		ApplyCouponToCart          func(childComplexity int, input *model.ApplyCouponToCartInput) int
-		AssignCustomerToGuestCart  func(childComplexity int, cartID string) int
-		CreateEmptyCart            func(childComplexity int, input *model.CreateEmptyCartInput) int
-		CreateGuestCart            func(childComplexity int, input *model.CreateGuestCartInput) int
-		EstimateShippingMethods    func(childComplexity int, input model.EstimateShippingMethodsInput) int
-		EstimateTotals             func(childComplexity int, input model.EstimateTotalsInput) int
-		MergeCarts                 func(childComplexity int, sourceCartID string, destinationCartID *string) int
-		PlaceOrder                 func(childComplexity int, input *model.PlaceOrderInput) int
-		RemoveCouponFromCart       func(childComplexity int, input *model.RemoveCouponFromCartInput) int
-		RemoveItemFromCart         func(childComplexity int, input *model.RemoveItemFromCartInput) int
-		ReorderItems               func(childComplexity int, orderNumber string) int
-		SetBillingAddressOnCart    func(childComplexity int, input *model.SetBillingAddressOnCartInput) int
-		SetGuestEmailOnCart        func(childComplexity int, input *model.SetGuestEmailOnCartInput) int
-		SetPaymentMethodOnCart     func(childComplexity int, input *model.SetPaymentMethodOnCartInput) int
-		SetShippingAddressesOnCart func(childComplexity int, input *model.SetShippingAddressesOnCartInput) int
-		SetShippingMethodsOnCart   func(childComplexity int, input *model.SetShippingMethodsOnCartInput) int
-		UpdateCartItems            func(childComplexity int, input *model.UpdateCartItemsInput) int
+		AddBundleProductsToCart       func(childComplexity int, input *model.AddBundleProductsToCartInput) int
+		AddConfigurableProductsToCart func(childComplexity int, input *model.AddConfigurableProductsToCartInput) int
+		AddProductsToCart             func(childComplexity int, cartID string, cartItems []*model.CartItemInput) int
+		AddSimpleProductsToCart       func(childComplexity int, input *model.AddSimpleProductsToCartInput) int
+		AddVirtualProductsToCart      func(childComplexity int, input *model.AddVirtualProductsToCartInput) int
+		ApplyCouponToCart             func(childComplexity int, input *model.ApplyCouponToCartInput) int
+		AssignCustomerToGuestCart     func(childComplexity int, cartID string) int
+		CreateEmptyCart               func(childComplexity int, input *model.CreateEmptyCartInput) int
+		CreateGuestCart               func(childComplexity int, input *model.CreateGuestCartInput) int
+		EstimateShippingMethods       func(childComplexity int, input model.EstimateShippingMethodsInput) int
+		EstimateTotals                func(childComplexity int, input model.EstimateTotalsInput) int
+		MergeCarts                    func(childComplexity int, sourceCartID string, destinationCartID *string) int
+		PlaceOrder                    func(childComplexity int, input *model.PlaceOrderInput) int
+		RemoveCouponFromCart          func(childComplexity int, input *model.RemoveCouponFromCartInput) int
+		RemoveItemFromCart            func(childComplexity int, input *model.RemoveItemFromCartInput) int
+		ReorderItems                  func(childComplexity int, orderNumber string) int
+		SetBillingAddressOnCart       func(childComplexity int, input *model.SetBillingAddressOnCartInput) int
+		SetGuestEmailOnCart           func(childComplexity int, input *model.SetGuestEmailOnCartInput) int
+		SetPaymentMethodOnCart        func(childComplexity int, input *model.SetPaymentMethodOnCartInput) int
+		SetShippingAddressesOnCart    func(childComplexity int, input *model.SetShippingAddressesOnCartInput) int
+		SetShippingMethodsOnCart      func(childComplexity int, input *model.SetShippingMethodsOnCartInput) int
+		UpdateCartItems               func(childComplexity int, input *model.UpdateCartItemsInput) int
 	}
 
 	PlaceOrderError struct {
@@ -277,6 +301,8 @@ type ComplexityRoot struct {
 		CarrierTitle func(childComplexity int) int
 		MethodCode   func(childComplexity int) int
 		MethodTitle  func(childComplexity int) int
+		PriceExclTax func(childComplexity int) int
+		PriceInclTax func(childComplexity int) int
 	}
 
 	SetBillingAddressOnCartOutput struct {
@@ -330,6 +356,10 @@ type MutationResolver interface {
 	CreateEmptyCart(ctx context.Context, input *model.CreateEmptyCartInput) (*string, error)
 	CreateGuestCart(ctx context.Context, input *model.CreateGuestCartInput) (*model.CreateGuestCartOutput, error)
 	AddProductsToCart(ctx context.Context, cartID string, cartItems []*model.CartItemInput) (*model.AddProductsToCartOutput, error)
+	AddSimpleProductsToCart(ctx context.Context, input *model.AddSimpleProductsToCartInput) (*model.AddSimpleProductsToCartOutput, error)
+	AddVirtualProductsToCart(ctx context.Context, input *model.AddVirtualProductsToCartInput) (*model.AddVirtualProductsToCartOutput, error)
+	AddConfigurableProductsToCart(ctx context.Context, input *model.AddConfigurableProductsToCartInput) (*model.AddConfigurableProductsToCartOutput, error)
+	AddBundleProductsToCart(ctx context.Context, input *model.AddBundleProductsToCartInput) (*model.AddBundleProductsToCartOutput, error)
 	UpdateCartItems(ctx context.Context, input *model.UpdateCartItemsInput) (*model.UpdateCartItemsOutput, error)
 	RemoveItemFromCart(ctx context.Context, input *model.RemoveItemFromCartInput) (*model.RemoveItemFromCartOutput, error)
 	SetShippingAddressesOnCart(ctx context.Context, input *model.SetShippingAddressesOnCartInput) (*model.SetShippingAddressesOnCartOutput, error)
@@ -365,6 +395,20 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
+	case "AddBundleProductsToCartOutput.cart":
+		if e.ComplexityRoot.AddBundleProductsToCartOutput.Cart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AddBundleProductsToCartOutput.Cart(childComplexity), true
+
+	case "AddConfigurableProductsToCartOutput.cart":
+		if e.ComplexityRoot.AddConfigurableProductsToCartOutput.Cart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AddConfigurableProductsToCartOutput.Cart(childComplexity), true
+
 	case "AddProductsToCartOutput.cart":
 		if e.ComplexityRoot.AddProductsToCartOutput.Cart == nil {
 			break
@@ -377,6 +421,20 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AddProductsToCartOutput.UserErrors(childComplexity), true
+
+	case "AddSimpleProductsToCartOutput.cart":
+		if e.ComplexityRoot.AddSimpleProductsToCartOutput.Cart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AddSimpleProductsToCartOutput.Cart(childComplexity), true
+
+	case "AddVirtualProductsToCartOutput.cart":
+		if e.ComplexityRoot.AddVirtualProductsToCartOutput.Cart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AddVirtualProductsToCartOutput.Cart(childComplexity), true
 
 	case "AppliedCoupon.code":
 		if e.ComplexityRoot.AppliedCoupon.Code == nil {
@@ -429,6 +487,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AvailableShippingMethod.CarrierTitle(childComplexity), true
+	case "AvailableShippingMethod.error_message":
+		if e.ComplexityRoot.AvailableShippingMethod.ErrorMessage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AvailableShippingMethod.ErrorMessage(childComplexity), true
 	case "AvailableShippingMethod.method_code":
 		if e.ComplexityRoot.AvailableShippingMethod.MethodCode == nil {
 			break
@@ -441,6 +505,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AvailableShippingMethod.MethodTitle(childComplexity), true
+	case "AvailableShippingMethod.price_excl_tax":
+		if e.ComplexityRoot.AvailableShippingMethod.PriceExclTax == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AvailableShippingMethod.PriceExclTax(childComplexity), true
+	case "AvailableShippingMethod.price_incl_tax":
+		if e.ComplexityRoot.AvailableShippingMethod.PriceInclTax == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AvailableShippingMethod.PriceInclTax(childComplexity), true
 
 	case "BillingCartAddress.city":
 		if e.ComplexityRoot.BillingCartAddress.City == nil {
@@ -853,6 +929,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Discount.Amount(childComplexity), true
+	case "Discount.applied_to":
+		if e.ComplexityRoot.Discount.AppliedTo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Discount.AppliedTo(childComplexity), true
 	case "Discount.label":
 		if e.ComplexityRoot.Discount.Label == nil {
 			break
@@ -904,6 +986,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Money.Value(childComplexity), true
 
+	case "Mutation.addBundleProductsToCart":
+		if e.ComplexityRoot.Mutation.AddBundleProductsToCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addBundleProductsToCart_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddBundleProductsToCart(childComplexity, args["input"].(*model.AddBundleProductsToCartInput)), true
+	case "Mutation.addConfigurableProductsToCart":
+		if e.ComplexityRoot.Mutation.AddConfigurableProductsToCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addConfigurableProductsToCart_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddConfigurableProductsToCart(childComplexity, args["input"].(*model.AddConfigurableProductsToCartInput)), true
 	case "Mutation.addProductsToCart":
 		if e.ComplexityRoot.Mutation.AddProductsToCart == nil {
 			break
@@ -915,6 +1019,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddProductsToCart(childComplexity, args["cartId"].(string), args["cartItems"].([]*model.CartItemInput)), true
+	case "Mutation.addSimpleProductsToCart":
+		if e.ComplexityRoot.Mutation.AddSimpleProductsToCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addSimpleProductsToCart_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddSimpleProductsToCart(childComplexity, args["input"].(*model.AddSimpleProductsToCartInput)), true
+	case "Mutation.addVirtualProductsToCart":
+		if e.ComplexityRoot.Mutation.AddVirtualProductsToCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addVirtualProductsToCart_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddVirtualProductsToCart(childComplexity, args["input"].(*model.AddVirtualProductsToCartInput)), true
 	case "Mutation.applyCouponToCart":
 		if e.ComplexityRoot.Mutation.ApplyCouponToCart == nil {
 			break
@@ -1305,6 +1431,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.SelectedShippingMethod.MethodTitle(childComplexity), true
+	case "SelectedShippingMethod.price_excl_tax":
+		if e.ComplexityRoot.SelectedShippingMethod.PriceExclTax == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedShippingMethod.PriceExclTax(childComplexity), true
+	case "SelectedShippingMethod.price_incl_tax":
+		if e.ComplexityRoot.SelectedShippingMethod.PriceInclTax == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedShippingMethod.PriceInclTax(childComplexity), true
 
 	case "SetBillingAddressOnCartOutput.cart":
 		if e.ComplexityRoot.SetBillingAddressOnCartOutput.Cart == nil {
@@ -1454,12 +1592,20 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputAddBundleProductsToCartInput,
+		ec.unmarshalInputAddConfigurableProductsToCartInput,
+		ec.unmarshalInputAddSimpleProductsToCartInput,
+		ec.unmarshalInputAddVirtualProductsToCartInput,
 		ec.unmarshalInputApplyCouponToCartInput,
 		ec.unmarshalInputBillingAddressInput,
+		ec.unmarshalInputBundleOptionInput,
+		ec.unmarshalInputBundleProductCartItemInput,
 		ec.unmarshalInputCartAddressInput,
 		ec.unmarshalInputCartItemInput,
 		ec.unmarshalInputCartItemUpdateInput,
+		ec.unmarshalInputConfigurableProductCartItemInput,
 		ec.unmarshalInputCreateGuestCartInput,
+		ec.unmarshalInputCustomizableOptionInput,
 		ec.unmarshalInputEnteredOptionInput,
 		ec.unmarshalInputEstimateAddressInput,
 		ec.unmarshalInputEstimateShippingMethodsInput,
@@ -1475,7 +1621,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputSetShippingMethodsOnCartInput,
 		ec.unmarshalInputShippingAddressInput,
 		ec.unmarshalInputShippingMethodInput,
+		ec.unmarshalInputSimpleProductCartItemInput,
 		ec.unmarshalInputUpdateCartItemsInput,
+		ec.unmarshalInputVirtualProductCartItemInput,
 		ec.unmarshalInputcreateEmptyCartInput,
 	)
 	first := true
@@ -1571,6 +1719,28 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_addBundleProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOAddBundleProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddBundleProductsToCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addConfigurableProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOAddConfigurableProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddConfigurableProductsToCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1584,6 +1754,28 @@ func (ec *executionContext) field_Mutation_addProductsToCart_args(ctx context.Co
 		return nil, err
 	}
 	args["cartItems"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addSimpleProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOAddSimpleProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddSimpleProductsToCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addVirtualProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOAddVirtualProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddVirtualProductsToCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -1853,6 +2045,112 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
+func (ec *executionContext) _AddBundleProductsToCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.AddBundleProductsToCartOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AddBundleProductsToCartOutput_cart,
+		func(ctx context.Context) (any, error) {
+			return obj.Cart, nil
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AddBundleProductsToCartOutput_cart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AddBundleProductsToCartOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AddConfigurableProductsToCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.AddConfigurableProductsToCartOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AddConfigurableProductsToCartOutput_cart,
+		func(ctx context.Context) (any, error) {
+			return obj.Cart, nil
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AddConfigurableProductsToCartOutput_cart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AddConfigurableProductsToCartOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AddProductsToCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.AddProductsToCartOutput) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1936,6 +2234,112 @@ func (ec *executionContext) fieldContext_AddProductsToCartOutput_user_errors(_ c
 				return ec.fieldContext_CartUserInputError_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CartUserInputError", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AddSimpleProductsToCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.AddSimpleProductsToCartOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AddSimpleProductsToCartOutput_cart,
+		func(ctx context.Context) (any, error) {
+			return obj.Cart, nil
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AddSimpleProductsToCartOutput_cart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AddSimpleProductsToCartOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AddVirtualProductsToCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.AddVirtualProductsToCartOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AddVirtualProductsToCartOutput_cart,
+		func(ctx context.Context) (any, error) {
+			return obj.Cart, nil
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AddVirtualProductsToCartOutput_cart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AddVirtualProductsToCartOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
 		},
 	}
 	return fc, nil
@@ -2232,6 +2636,76 @@ func (ec *executionContext) fieldContext_AvailableShippingMethod_amount(_ contex
 	return fc, nil
 }
 
+func (ec *executionContext) _AvailableShippingMethod_price_excl_tax(ctx context.Context, field graphql.CollectedField, obj *model.AvailableShippingMethod) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AvailableShippingMethod_price_excl_tax,
+		func(ctx context.Context) (any, error) {
+			return obj.PriceExclTax, nil
+		},
+		nil,
+		ec.marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AvailableShippingMethod_price_excl_tax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AvailableShippingMethod",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AvailableShippingMethod_price_incl_tax(ctx context.Context, field graphql.CollectedField, obj *model.AvailableShippingMethod) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AvailableShippingMethod_price_incl_tax,
+		func(ctx context.Context) (any, error) {
+			return obj.PriceInclTax, nil
+		},
+		nil,
+		ec.marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_AvailableShippingMethod_price_incl_tax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AvailableShippingMethod",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AvailableShippingMethod_available(ctx context.Context, field graphql.CollectedField, obj *model.AvailableShippingMethod) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2256,6 +2730,35 @@ func (ec *executionContext) fieldContext_AvailableShippingMethod_available(_ con
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AvailableShippingMethod_error_message(ctx context.Context, field graphql.CollectedField, obj *model.AvailableShippingMethod) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_AvailableShippingMethod_error_message,
+		func(ctx context.Context) (any, error) {
+			return obj.ErrorMessage, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_AvailableShippingMethod_error_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AvailableShippingMethod",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3512,6 +4015,8 @@ func (ec *executionContext) fieldContext_CartItemPrices_discounts(_ context.Cont
 				return ec.fieldContext_Discount_amount(ctx, field)
 			case "label":
 				return ec.fieldContext_Discount_label(ctx, field)
+			case "applied_to":
+				return ec.fieldContext_Discount_applied_to(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Discount", field.Name)
 		},
@@ -3902,6 +4407,8 @@ func (ec *executionContext) fieldContext_CartPrices_discounts(_ context.Context,
 				return ec.fieldContext_Discount_amount(ctx, field)
 			case "label":
 				return ec.fieldContext_Discount_label(ctx, field)
+			case "applied_to":
+				return ec.fieldContext_Discount_applied_to(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Discount", field.Name)
 		},
@@ -4486,6 +4993,35 @@ func (ec *executionContext) fieldContext_Discount_label(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Discount_applied_to(ctx context.Context, field graphql.CollectedField, obj *model.Discount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Discount_applied_to,
+		func(ctx context.Context) (any, error) {
+			return obj.AppliedTo, nil
+		},
+		nil,
+		ec.marshalODiscountAppliedToType2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐDiscountAppliedToType,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Discount_applied_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Discount",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type DiscountAppliedToType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _EstimateTotalsOutput_grand_total(ctx context.Context, field graphql.CollectedField, obj *model.EstimateTotalsOutput) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4846,6 +5382,186 @@ func (ec *executionContext) fieldContext_Mutation_addProductsToCart(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_addProductsToCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addSimpleProductsToCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addSimpleProductsToCart,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddSimpleProductsToCart(ctx, fc.Args["input"].(*model.AddSimpleProductsToCartInput))
+		},
+		nil,
+		ec.marshalOAddSimpleProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddSimpleProductsToCartOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addSimpleProductsToCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cart":
+				return ec.fieldContext_AddSimpleProductsToCartOutput_cart(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AddSimpleProductsToCartOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addSimpleProductsToCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addVirtualProductsToCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addVirtualProductsToCart,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddVirtualProductsToCart(ctx, fc.Args["input"].(*model.AddVirtualProductsToCartInput))
+		},
+		nil,
+		ec.marshalOAddVirtualProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddVirtualProductsToCartOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addVirtualProductsToCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cart":
+				return ec.fieldContext_AddVirtualProductsToCartOutput_cart(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AddVirtualProductsToCartOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addVirtualProductsToCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addConfigurableProductsToCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addConfigurableProductsToCart,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddConfigurableProductsToCart(ctx, fc.Args["input"].(*model.AddConfigurableProductsToCartInput))
+		},
+		nil,
+		ec.marshalOAddConfigurableProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddConfigurableProductsToCartOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addConfigurableProductsToCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cart":
+				return ec.fieldContext_AddConfigurableProductsToCartOutput_cart(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AddConfigurableProductsToCartOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addConfigurableProductsToCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addBundleProductsToCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addBundleProductsToCart,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddBundleProductsToCart(ctx, fc.Args["input"].(*model.AddBundleProductsToCartInput))
+		},
+		nil,
+		ec.marshalOAddBundleProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddBundleProductsToCartOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addBundleProductsToCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cart":
+				return ec.fieldContext_AddBundleProductsToCartOutput_cart(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AddBundleProductsToCartOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addBundleProductsToCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5469,8 +6185,14 @@ func (ec *executionContext) fieldContext_Mutation_estimateShippingMethods(ctx co
 				return ec.fieldContext_AvailableShippingMethod_method_title(ctx, field)
 			case "amount":
 				return ec.fieldContext_AvailableShippingMethod_amount(ctx, field)
+			case "price_excl_tax":
+				return ec.fieldContext_AvailableShippingMethod_price_excl_tax(ctx, field)
+			case "price_incl_tax":
+				return ec.fieldContext_AvailableShippingMethod_price_incl_tax(ctx, field)
 			case "available":
 				return ec.fieldContext_AvailableShippingMethod_available(ctx, field)
+			case "error_message":
+				return ec.fieldContext_AvailableShippingMethod_error_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AvailableShippingMethod", field.Name)
 		},
@@ -6764,6 +7486,76 @@ func (ec *executionContext) fieldContext_SelectedShippingMethod_amount(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _SelectedShippingMethod_price_excl_tax(ctx context.Context, field graphql.CollectedField, obj *model.SelectedShippingMethod) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedShippingMethod_price_excl_tax,
+		func(ctx context.Context) (any, error) {
+			return obj.PriceExclTax, nil
+		},
+		nil,
+		ec.marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedShippingMethod_price_excl_tax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedShippingMethod",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedShippingMethod_price_incl_tax(ctx context.Context, field graphql.CollectedField, obj *model.SelectedShippingMethod) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedShippingMethod_price_incl_tax,
+		func(ctx context.Context) (any, error) {
+			return obj.PriceInclTax, nil
+		},
+		nil,
+		ec.marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedShippingMethod_price_incl_tax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedShippingMethod",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_Money_value(ctx, field)
+			case "currency":
+				return ec.fieldContext_Money_currency(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Money", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _SetBillingAddressOnCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.SetBillingAddressOnCartOutput) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7338,8 +8130,14 @@ func (ec *executionContext) fieldContext_ShippingCartAddress_available_shipping_
 				return ec.fieldContext_AvailableShippingMethod_method_title(ctx, field)
 			case "amount":
 				return ec.fieldContext_AvailableShippingMethod_amount(ctx, field)
+			case "price_excl_tax":
+				return ec.fieldContext_AvailableShippingMethod_price_excl_tax(ctx, field)
+			case "price_incl_tax":
+				return ec.fieldContext_AvailableShippingMethod_price_incl_tax(ctx, field)
 			case "available":
 				return ec.fieldContext_AvailableShippingMethod_available(ctx, field)
+			case "error_message":
+				return ec.fieldContext_AvailableShippingMethod_error_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AvailableShippingMethod", field.Name)
 		},
@@ -7381,6 +8179,10 @@ func (ec *executionContext) fieldContext_ShippingCartAddress_selected_shipping_m
 				return ec.fieldContext_SelectedShippingMethod_method_title(ctx, field)
 			case "amount":
 				return ec.fieldContext_SelectedShippingMethod_amount(ctx, field)
+			case "price_excl_tax":
+				return ec.fieldContext_SelectedShippingMethod_price_excl_tax(ctx, field)
+			case "price_incl_tax":
+				return ec.fieldContext_SelectedShippingMethod_price_incl_tax(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type SelectedShippingMethod", field.Name)
 		},
@@ -9060,6 +9862,154 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputAddBundleProductsToCartInput(ctx context.Context, obj any) (model.AddBundleProductsToCartInput, error) {
+	var it model.AddBundleProductsToCartInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "cart_items"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "cart_items":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_items"))
+			data, err := ec.unmarshalNBundleProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleProductCartItemInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartItems = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputAddConfigurableProductsToCartInput(ctx context.Context, obj any) (model.AddConfigurableProductsToCartInput, error) {
+	var it model.AddConfigurableProductsToCartInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "cart_items"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "cart_items":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_items"))
+			data, err := ec.unmarshalNConfigurableProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐConfigurableProductCartItemInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartItems = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputAddSimpleProductsToCartInput(ctx context.Context, obj any) (model.AddSimpleProductsToCartInput, error) {
+	var it model.AddSimpleProductsToCartInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "cart_items"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "cart_items":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_items"))
+			data, err := ec.unmarshalNSimpleProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSimpleProductCartItemInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartItems = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputAddVirtualProductsToCartInput(ctx context.Context, obj any) (model.AddVirtualProductsToCartInput, error) {
+	var it model.AddVirtualProductsToCartInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "cart_items"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "cart_items":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_items"))
+			data, err := ec.unmarshalNVirtualProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐVirtualProductCartItemInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartItems = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputApplyCouponToCartInput(ctx context.Context, obj any) (model.ApplyCouponToCartInput, error) {
 	var it model.ApplyCouponToCartInput
 	if obj == nil {
@@ -9136,6 +10086,94 @@ func (ec *executionContext) unmarshalInputBillingAddressInput(ctx context.Contex
 				return it, err
 			}
 			it.SameAsShipping = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputBundleOptionInput(ctx context.Context, obj any) (model.BundleOptionInput, error) {
+	var it model.BundleOptionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "quantity", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "quantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+			data, err := ec.unmarshalNFloat2float64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Quantity = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputBundleProductCartItemInput(ctx context.Context, obj any) (model.BundleProductCartItemInput, error) {
+	var it model.BundleProductCartItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"data", "bundle_options", "customizable_options"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "data":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("data"))
+			data, err := ec.unmarshalNCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Data = data
+		case "bundle_options":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bundle_options"))
+			data, err := ec.unmarshalNBundleOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleOptionInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.BundleOptions = data
+		case "customizable_options":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("customizable_options"))
+			data, err := ec.unmarshalOCustomizableOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CustomizableOptions = data
 		}
 	}
 	return it, nil
@@ -9329,6 +10367,57 @@ func (ec *executionContext) unmarshalInputCartItemUpdateInput(ctx context.Contex
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputConfigurableProductCartItemInput(ctx context.Context, obj any) (model.ConfigurableProductCartItemInput, error) {
+	var it model.ConfigurableProductCartItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"data", "parent_sku", "variant_sku", "customizable_options"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "data":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("data"))
+			data, err := ec.unmarshalNCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Data = data
+		case "parent_sku":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("parent_sku"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ParentSku = data
+		case "variant_sku":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("variant_sku"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.VariantSku = data
+		case "customizable_options":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("customizable_options"))
+			data, err := ec.unmarshalOCustomizableOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CustomizableOptions = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateGuestCartInput(ctx context.Context, obj any) (model.CreateGuestCartInput, error) {
 	var it model.CreateGuestCartInput
 	if obj == nil {
@@ -9354,6 +10443,43 @@ func (ec *executionContext) unmarshalInputCreateGuestCartInput(ctx context.Conte
 				return it, err
 			}
 			it.CartUID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCustomizableOptionInput(ctx context.Context, obj any) (model.CustomizableOptionInput, error) {
+	var it model.CustomizableOptionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "value_string"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "value_string":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value_string"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ValueString = data
 		}
 	}
 	return it, nil
@@ -9914,6 +11040,43 @@ func (ec *executionContext) unmarshalInputShippingMethodInput(ctx context.Contex
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputSimpleProductCartItemInput(ctx context.Context, obj any) (model.SimpleProductCartItemInput, error) {
+	var it model.SimpleProductCartItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"data", "customizable_options"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "data":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("data"))
+			data, err := ec.unmarshalNCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Data = data
+		case "customizable_options":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("customizable_options"))
+			data, err := ec.unmarshalOCustomizableOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CustomizableOptions = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpdateCartItemsInput(ctx context.Context, obj any) (model.UpdateCartItemsInput, error) {
 	var it model.UpdateCartItemsInput
 	if obj == nil {
@@ -9946,6 +11109,43 @@ func (ec *executionContext) unmarshalInputUpdateCartItemsInput(ctx context.Conte
 				return it, err
 			}
 			it.CartItems = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputVirtualProductCartItemInput(ctx context.Context, obj any) (model.VirtualProductCartItemInput, error) {
+	var it model.VirtualProductCartItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"data", "customizable_options"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "data":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("data"))
+			data, err := ec.unmarshalNCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Data = data
+		case "customizable_options":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("customizable_options"))
+			data, err := ec.unmarshalOCustomizableOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CustomizableOptions = data
 		}
 	}
 	return it, nil
@@ -10023,6 +11223,84 @@ func (ec *executionContext) _CartItemInterface(ctx context.Context, sel ast.Sele
 
 // region    **************************** object.gotpl ****************************
 
+var addBundleProductsToCartOutputImplementors = []string{"AddBundleProductsToCartOutput"}
+
+func (ec *executionContext) _AddBundleProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.AddBundleProductsToCartOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, addBundleProductsToCartOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AddBundleProductsToCartOutput")
+		case "cart":
+			out.Values[i] = ec._AddBundleProductsToCartOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var addConfigurableProductsToCartOutputImplementors = []string{"AddConfigurableProductsToCartOutput"}
+
+func (ec *executionContext) _AddConfigurableProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.AddConfigurableProductsToCartOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, addConfigurableProductsToCartOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AddConfigurableProductsToCartOutput")
+		case "cart":
+			out.Values[i] = ec._AddConfigurableProductsToCartOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var addProductsToCartOutputImplementors = []string{"AddProductsToCartOutput"}
 
 func (ec *executionContext) _AddProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.AddProductsToCartOutput) graphql.Marshaler {
@@ -10041,6 +11319,84 @@ func (ec *executionContext) _AddProductsToCartOutput(ctx context.Context, sel as
 			}
 		case "user_errors":
 			out.Values[i] = ec._AddProductsToCartOutput_user_errors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var addSimpleProductsToCartOutputImplementors = []string{"AddSimpleProductsToCartOutput"}
+
+func (ec *executionContext) _AddSimpleProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.AddSimpleProductsToCartOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, addSimpleProductsToCartOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AddSimpleProductsToCartOutput")
+		case "cart":
+			out.Values[i] = ec._AddSimpleProductsToCartOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var addVirtualProductsToCartOutputImplementors = []string{"AddVirtualProductsToCartOutput"}
+
+func (ec *executionContext) _AddVirtualProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.AddVirtualProductsToCartOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, addVirtualProductsToCartOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AddVirtualProductsToCartOutput")
+		case "cart":
+			out.Values[i] = ec._AddVirtualProductsToCartOutput_cart(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -10225,11 +11581,23 @@ func (ec *executionContext) _AvailableShippingMethod(ctx context.Context, sel as
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "price_excl_tax":
+			out.Values[i] = ec._AvailableShippingMethod_price_excl_tax(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "price_incl_tax":
+			out.Values[i] = ec._AvailableShippingMethod_price_incl_tax(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "available":
 			out.Values[i] = ec._AvailableShippingMethod_available(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "error_message":
+			out.Values[i] = ec._AvailableShippingMethod_error_message(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11010,6 +12378,8 @@ func (ec *executionContext) _Discount(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "applied_to":
+			out.Values[i] = ec._Discount_applied_to(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11145,6 +12515,22 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "addProductsToCart":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addProductsToCart(ctx, field)
+			})
+		case "addSimpleProductsToCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addSimpleProductsToCart(ctx, field)
+			})
+		case "addVirtualProductsToCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addVirtualProductsToCart(ctx, field)
+			})
+		case "addConfigurableProductsToCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addConfigurableProductsToCart(ctx, field)
+			})
+		case "addBundleProductsToCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addBundleProductsToCart(ctx, field)
 			})
 		case "updateCartItems":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
@@ -11816,6 +13202,16 @@ func (ec *executionContext) _SelectedShippingMethod(ctx context.Context, sel ast
 			}
 		case "amount":
 			out.Values[i] = ec._SelectedShippingMethod_amount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "price_excl_tax":
+			out.Values[i] = ec._SelectedShippingMethod_price_excl_tax(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "price_incl_tax":
+			out.Values[i] = ec._SelectedShippingMethod_price_incl_tax(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -12556,6 +13952,46 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalNBundleOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleOptionInputᚄ(ctx context.Context, v any) ([]*model.BundleOptionInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.BundleOptionInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNBundleOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleOptionInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNBundleOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleOptionInput(ctx context.Context, v any) (*model.BundleOptionInput, error) {
+	res, err := ec.unmarshalInputBundleOptionInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNBundleProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleProductCartItemInputᚄ(ctx context.Context, v any) ([]*model.BundleProductCartItemInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.BundleProductCartItemInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNBundleProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleProductCartItemInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNBundleProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐBundleProductCartItemInput(ctx context.Context, v any) (*model.BundleProductCartItemInput, error) {
+	res, err := ec.unmarshalInputBundleProductCartItemInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNCart2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart(ctx context.Context, sel ast.SelectionSet, v model.Cart) graphql.Marshaler {
 	return ec._Cart(ctx, sel, &v)
 }
@@ -12710,6 +14146,26 @@ func (ec *executionContext) unmarshalNCheckoutUserInputErrorCodes2githubᚗcom�
 
 func (ec *executionContext) marshalNCheckoutUserInputErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorCodes(ctx context.Context, sel ast.SelectionSet, v model.CheckoutUserInputErrorCodes) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) unmarshalNConfigurableProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐConfigurableProductCartItemInputᚄ(ctx context.Context, v any) ([]*model.ConfigurableProductCartItemInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.ConfigurableProductCartItemInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNConfigurableProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐConfigurableProductCartItemInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNConfigurableProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐConfigurableProductCartItemInput(ctx context.Context, v any) (*model.ConfigurableProductCartItemInput, error) {
+	res, err := ec.unmarshalInputConfigurableProductCartItemInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNEnteredOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEnteredOptionInput(ctx context.Context, v any) (*model.EnteredOptionInput, error) {
@@ -12973,6 +14429,26 @@ func (ec *executionContext) unmarshalNShippingMethodInput2ᚖgithubᚗcomᚋmage
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNSimpleProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSimpleProductCartItemInputᚄ(ctx context.Context, v any) ([]*model.SimpleProductCartItemInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.SimpleProductCartItemInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNSimpleProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSimpleProductCartItemInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNSimpleProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSimpleProductCartItemInput(ctx context.Context, v any) (*model.SimpleProductCartItemInput, error) {
+	res, err := ec.unmarshalInputSimpleProductCartItemInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -13041,6 +14517,26 @@ func (ec *executionContext) marshalNString2ᚕᚖstring(ctx context.Context, sel
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalNVirtualProductCartItemInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐVirtualProductCartItemInputᚄ(ctx context.Context, v any) ([]*model.VirtualProductCartItemInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.VirtualProductCartItemInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNVirtualProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐVirtualProductCartItemInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNVirtualProductCartItemInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐVirtualProductCartItemInput(ctx context.Context, v any) (*model.VirtualProductCartItemInput, error) {
+	res, err := ec.unmarshalInputVirtualProductCartItemInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
@@ -13184,11 +14680,71 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) unmarshalOAddBundleProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddBundleProductsToCartInput(ctx context.Context, v any) (*model.AddBundleProductsToCartInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputAddBundleProductsToCartInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAddBundleProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddBundleProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, v *model.AddBundleProductsToCartOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AddBundleProductsToCartOutput(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAddConfigurableProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddConfigurableProductsToCartInput(ctx context.Context, v any) (*model.AddConfigurableProductsToCartInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputAddConfigurableProductsToCartInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAddConfigurableProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddConfigurableProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, v *model.AddConfigurableProductsToCartOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AddConfigurableProductsToCartOutput(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalOAddProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, v *model.AddProductsToCartOutput) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._AddProductsToCartOutput(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAddSimpleProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddSimpleProductsToCartInput(ctx context.Context, v any) (*model.AddSimpleProductsToCartInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputAddSimpleProductsToCartInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAddSimpleProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddSimpleProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, v *model.AddSimpleProductsToCartOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AddSimpleProductsToCartOutput(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAddVirtualProductsToCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddVirtualProductsToCartInput(ctx context.Context, v any) (*model.AddVirtualProductsToCartInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputAddVirtualProductsToCartInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAddVirtualProductsToCartOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAddVirtualProductsToCartOutput(ctx context.Context, sel ast.SelectionSet, v *model.AddVirtualProductsToCartOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AddVirtualProductsToCartOutput(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOAppliedCoupon2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐAppliedCoupon(ctx context.Context, sel ast.SelectionSet, v []*model.AppliedCoupon) graphql.Marshaler {
@@ -13444,6 +15000,32 @@ func (ec *executionContext) marshalOCurrencyEnum2ᚖgithubᚗcomᚋmagendooroᚋ
 	return v
 }
 
+func (ec *executionContext) unmarshalOCustomizableOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx context.Context, v any) ([]*model.CustomizableOptionInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.CustomizableOptionInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalOCustomizableOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalOCustomizableOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCustomizableOptionInput(ctx context.Context, v any) (*model.CustomizableOptionInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputCustomizableOptionInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalODiscount2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐDiscount(ctx context.Context, sel ast.SelectionSet, v []*model.Discount) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -13462,6 +15044,22 @@ func (ec *executionContext) marshalODiscount2ᚖgithubᚗcomᚋmagendooroᚋmage
 		return graphql.Null
 	}
 	return ec._Discount(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalODiscountAppliedToType2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐDiscountAppliedToType(ctx context.Context, v any) (*model.DiscountAppliedToType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.DiscountAppliedToType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalODiscountAppliedToType2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐDiscountAppliedToType(ctx context.Context, sel ast.SelectionSet, v *model.DiscountAppliedToType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOEnteredOptionInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEnteredOptionInputᚄ(ctx context.Context, v any) ([]*model.EnteredOptionInput, error) {
