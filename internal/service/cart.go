@@ -742,7 +742,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	}
 	orderIn.RemoteIP = ctxkeys.GetRemoteIP(ctx)
 
-	incrementID, err := order.Place(ctx, s.orderRepo.DB(), orderIn)
+	incrementID, protectCode, err := order.Place(ctx, s.orderRepo.DB(), orderIn)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
 		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrPlaceOrderFailed.Error()), nil
@@ -751,7 +751,7 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	log.Info().Str("increment_id", incrementID).Int("quote_id", quoteID).Msg("order placed")
 	return &model.PlaceOrderOutput{
 		Errors:  []*model.PlaceOrderError{},
-		OrderV2: &model.PlacedOrder{Number: incrementID},
+		OrderV2: &model.PlacedOrder{Number: incrementID, Token: protectCode},
 	}, nil
 }
 

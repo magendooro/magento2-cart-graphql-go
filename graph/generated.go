@@ -217,6 +217,7 @@ type ComplexityRoot struct {
 
 	PlacedOrder struct {
 		Number func(childComplexity int) int
+		Token  func(childComplexity int) int
 	}
 
 	Query struct {
@@ -1091,6 +1092,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PlacedOrder.Number(childComplexity), true
+	case "PlacedOrder.token":
+		if e.ComplexityRoot.PlacedOrder.Token == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlacedOrder.Token(childComplexity), true
 
 	case "Query.cart":
 		if e.ComplexityRoot.Query.Cart == nil {
@@ -5500,6 +5507,8 @@ func (ec *executionContext) fieldContext_PlaceOrderOutput_orderV2(_ context.Cont
 			switch field.Name {
 			case "number":
 				return ec.fieldContext_PlacedOrder_number(ctx, field)
+			case "token":
+				return ec.fieldContext_PlacedOrder_token(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PlacedOrder", field.Name)
 		},
@@ -5524,6 +5533,35 @@ func (ec *executionContext) _PlacedOrder_number(ctx context.Context, field graph
 }
 
 func (ec *executionContext) fieldContext_PlacedOrder_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlacedOrder",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlacedOrder_token(ctx context.Context, field graphql.CollectedField, obj *model.PlacedOrder) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PlacedOrder_token,
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PlacedOrder_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PlacedOrder",
 		Field:      field,
@@ -10951,6 +10989,11 @@ func (ec *executionContext) _PlacedOrder(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = graphql.MarshalString("PlacedOrder")
 		case "number":
 			out.Values[i] = ec._PlacedOrder_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "token":
+			out.Values[i] = ec._PlacedOrder_token(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

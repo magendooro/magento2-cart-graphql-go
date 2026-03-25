@@ -455,6 +455,7 @@ type PlaceOrderError {
 
 type PlacedOrder {
     number: String!
+    token: String!
 }
 
 type ApplyCouponToCartOutput {

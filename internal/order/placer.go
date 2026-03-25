@@ -10,21 +10,23 @@ import (
 
 // Place writes the order to the database inside a single transaction.
 // It reserves the increment_id from sequence_order_1, inserts all order rows,
-// deactivates the quote, and returns the increment_id on success.
-func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", fmt.Errorf("begin transaction: %w", err)
+// deactivates the quote, and returns the increment_id and protect_code on success.
+// The protect_code is the order token used by guestOrderByToken in the customer service.
+func Place(ctx context.Context, db *sql.DB, in OrderInput) (incrementID, protectCode string, err error) {
+	tx, txErr := db.BeginTx(ctx, nil)
+	if txErr != nil {
+		return "", "", fmt.Errorf("begin transaction: %w", txErr)
 	}
 	defer tx.Rollback()
 
 	// 1. Reserve order increment_id
 	res, err := tx.ExecContext(ctx, "INSERT INTO sequence_order_1 VALUES ()")
 	if err != nil {
-		return "", fmt.Errorf("reserve order number: %w", err)
+		return "", "", fmt.Errorf("reserve order number: %w", err)
 	}
 	seqVal, _ := res.LastInsertId()
-	incrementID := fmt.Sprintf("%09d", seqVal)
+	incrementID = fmt.Sprintf("%09d", seqVal)
+	protectCode = generateProtectCode()
 
 	// 2. Insert sales_order
 	orderRes, err := tx.ExecContext(ctx, `
@@ -86,10 +88,10 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		in.TotalQty, in.TotalItemCount,
 		in.GrandTotal, in.GrandTotal,
 		in.BaseCurrencyCode, in.OrderCurrencyCode,
-		generateProtectCode(), in.RemoteIP,
+		protectCode, in.RemoteIP,
 	)
 	if err != nil {
-		return "", fmt.Errorf("insert sales_order: %w", err)
+		return "", "", fmt.Errorf("insert sales_order: %w", err)
 	}
 	orderID, _ := orderRes.LastInsertId()
 
@@ -103,7 +105,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		}
 		id, err := insertOrderItem(ctx, tx, orderID, 0, item)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		quoteToOrderItemID[item.QuoteItemID] = id
 	}
@@ -114,7 +116,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		}
 		parentOrderItemID := quoteToOrderItemID[*item.QuoteParentItemID]
 		if _, err := insertOrderItem(ctx, tx, orderID, parentOrderItemID, item); err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 
@@ -135,7 +137,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 			addr.Region, addr.RegionID, addr.Postcode, addr.CountryID, addr.Telephone,
 		)
 		if err != nil {
-			return "", fmt.Errorf("insert order address (%s): %w", addr.AddressType, err)
+			return "", "", fmt.Errorf("insert order address (%s): %w", addr.AddressType, err)
 		}
 		id, _ := addrRes.LastInsertId()
 		if addr.AddressType == "billing" {
@@ -150,7 +152,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		"UPDATE sales_order SET billing_address_id = ?, shipping_address_id = ? WHERE entity_id = ?",
 		billingAddrID, shippingAddrID, orderID,
 	); err != nil {
-		return "", fmt.Errorf("update order address ids: %w", err)
+		return "", "", fmt.Errorf("update order address ids: %w", err)
 	}
 
 	// 5. Insert sales_order_payment
@@ -164,7 +166,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		in.ShippingAmount, in.ShippingAmount,
 		fmt.Sprintf(`{"method_title":"%s"}`, in.PaymentMethod),
 	); err != nil {
-		return "", fmt.Errorf("insert order payment: %w", err)
+		return "", "", fmt.Errorf("insert order payment: %w", err)
 	}
 
 	// 6. Insert sales_order_grid
@@ -199,7 +201,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		in.Subtotal, in.ShippingAmount,
 		in.BaseCurrencyCode, in.OrderCurrencyCode,
 	); err != nil {
-		return "", fmt.Errorf("insert order grid: %w", err)
+		return "", "", fmt.Errorf("insert order grid: %w", err)
 	}
 
 	// 7. Insert inventory_reservation (negative qty per top-level SKU)
@@ -215,7 +217,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 			"INSERT INTO inventory_reservation (stock_id, sku, quantity, metadata) VALUES (1, ?, ?, ?)",
 			item.SKU, -item.Qty, metadata,
 		); err != nil {
-			return "", fmt.Errorf("insert inventory reservation for %s: %w", item.SKU, err)
+			return "", "", fmt.Errorf("insert inventory reservation for %s: %w", item.SKU, err)
 		}
 	}
 
@@ -224,14 +226,14 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (string, error) {
 		"UPDATE quote SET is_active = 0, reserved_order_id = ?, updated_at = NOW() WHERE entity_id = ?",
 		incrementID, in.QuoteID,
 	); err != nil {
-		return "", fmt.Errorf("deactivate quote: %w", err)
+		return "", "", fmt.Errorf("deactivate quote: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("commit order: %w", err)
+		return "", "", fmt.Errorf("commit order: %w", err)
 	}
 
-	return incrementID, nil
+	return incrementID, protectCode, nil
 }
 
 func insertOrderItem(ctx context.Context, tx *sql.Tx, orderID int64, parentOrderItemID int64, item OrderItemInput) (int64, error) {

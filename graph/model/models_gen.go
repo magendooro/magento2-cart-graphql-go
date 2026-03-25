@@ -286,6 +286,7 @@ type PlaceOrderOutput struct {
 
 type PlacedOrder struct {
 	Number string `json:"number"`
+	Token  string `json:"token"`
 }
 
 type Query struct {
