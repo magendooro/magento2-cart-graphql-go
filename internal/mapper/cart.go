@@ -41,6 +41,7 @@ type MapCartInput struct {
 	AvailPayments   []*repository.PaymentMethod
 	SelectedPayment *repository.PaymentMethod // nil if none selected
 	MaskedID        string
+	MediaBaseURL    string // e.g. "http://localhost/media/catalog/product"
 }
 
 // MapCart produces the full GraphQL Cart object from pre-fetched service data.
@@ -54,13 +55,29 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 		productTaxAmount = in.DisplayTotals.TaxAmount - in.DisplayTotals.ShippingTaxAmount
 	}
 
+	// Batch-load thumbnails for all product IDs present in the cart.
+	var productIDs []int
+	seen := make(map[int]bool)
+	for _, item := range in.Items {
+		if !seen[item.ProductID] {
+			productIDs = append(productIDs, item.ProductID)
+			seen[item.ProductID] = true
+		}
+	}
+	thumbPaths := m.loadThumbnails(ctx, productIDs)
+	thumbs := make(map[int]*model.CartItemProductImage, len(thumbPaths))
+	for productID, path := range thumbPaths {
+		url := in.MediaBaseURL + path
+		thumbs[productID] = &model.CartItemProductImage{URL: &url}
+	}
+
 	cartItems := make([]model.CartItemInterface, 0, len(in.Items))
 	for _, item := range in.Items {
 		if item.ParentItemID != nil {
 			continue
 		}
 		rowTotalInclTax := itemRowTotalInclTax(item.ItemID, item.RowTotal, taxIncludedInPrice, in.DisplayTotals)
-		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency, rowTotalInclTax))
+		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency, rowTotalInclTax, thumbs))
 	}
 
 	// Applied taxes
@@ -224,7 +241,8 @@ func (m *CartMapper) MapBillingAddress(ctx context.Context, a *repository.CartAd
 
 // MapCartItem converts a CartItemData into the appropriate GraphQL cart item interface.
 // rowTotalInclTax must be pre-computed by the caller (MapCart) from the pipeline totals.
-func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum, rowTotalInclTax float64) model.CartItemInterface {
+// thumbs is a map of productID → thumbnail image (may be nil or empty).
+func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum, rowTotalInclTax float64, thumbs map[int]*model.CartItemProductImage) model.CartItemInterface {
 	uid := EncodeUID(item.ItemID)
 	prices := &model.CartItemPrices{
 		Price:                &model.Money{Value: &item.Price, Currency: &currency},
@@ -241,23 +259,24 @@ func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemD
 
 	switch item.ProductType {
 	case "configurable":
-		return m.mapConfigurableItem(ctx, item, allItems, uid, prices, currency)
+		return m.mapConfigurableItem(ctx, item, allItems, uid, prices, currency, thumbs)
 	case "bundle":
-		return m.mapBundleItem(ctx, item, allItems, uid, prices, currency)
+		return m.mapBundleItem(ctx, item, allItems, uid, prices, currency, thumbs)
 	default:
 		return &model.SimpleCartItem{
 			UID:      uid,
 			Quantity: item.Qty,
 			Product: &model.CartItemProduct{
-				Sku:  item.SKU,
-				Name: &item.Name,
+				Sku:       item.SKU,
+				Name:      &item.Name,
+				Thumbnail: thumbs[item.ProductID],
 			},
 			Prices: prices,
 		}
 	}
 }
 
-func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum) *model.ConfigurableCartItem {
+func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage) *model.ConfigurableCartItem {
 	// Find the parent product's original SKU
 	var parentSKU string
 	m.db.QueryRowContext(ctx,
@@ -322,22 +341,24 @@ func (m *CartMapper) mapConfigurableItem(ctx context.Context, item *repository.C
 		UID:      uid,
 		Quantity: item.Qty,
 		Product: &model.CartItemProduct{
-			Sku:  parentSKU,
-			Name: &item.Name,
+			Sku:       parentSKU,
+			Name:      &item.Name,
+			Thumbnail: thumbs[item.ProductID],
 		},
 		Prices:              prices,
 		ConfigurableOptions: configOptions,
 	}
 	if childItem != nil {
 		result.ConfiguredVariant = &model.CartItemProduct{
-			Sku:  childItem.SKU,
-			Name: &childItem.Name,
+			Sku:       childItem.SKU,
+			Name:      &childItem.Name,
+			Thumbnail: thumbs[childItem.ProductID],
 		}
 	}
 	return result
 }
 
-func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum) *model.BundleCartItem {
+func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum, thumbs map[int]*model.CartItemProductImage) *model.BundleCartItem {
 	// Find child items
 	var childItems []*repository.CartItemData
 	for _, ci := range allItems {
@@ -410,12 +431,54 @@ func (m *CartMapper) mapBundleItem(ctx context.Context, item *repository.CartIte
 		UID:      uid,
 		Quantity: item.Qty,
 		Product: &model.CartItemProduct{
-			Sku:  parentSKU,
-			Name: &item.Name,
+			Sku:       parentSKU,
+			Name:      &item.Name,
+			Thumbnail: thumbs[item.ProductID],
 		},
 		Prices:        prices,
 		BundleOptions: bundleOptions,
 	}
+}
+
+// loadThumbnails batch-loads the small_image attribute value for the given product IDs.
+// Returns a map of productID → image path (e.g. "/e/x/example.jpg").
+// Values of "no_selection" are excluded. On any DB error the empty map is returned.
+func (m *CartMapper) loadThumbnails(ctx context.Context, productIDs []int) map[int]string {
+	if len(productIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(productIDs))
+	args := make([]interface{}, len(productIDs))
+	for i, id := range productIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf(`
+		SELECT entity_id, value
+		FROM catalog_product_entity_varchar
+		WHERE attribute_id = (
+			SELECT attribute_id FROM eav_attribute
+			WHERE attribute_code = 'small_image' AND entity_type_id = 4
+		)
+		  AND store_id = 0
+		  AND entity_id IN (%s)
+		  AND value IS NOT NULL AND value != 'no_selection'`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := m.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	result := make(map[int]string, len(productIDs))
+	for rows.Next() {
+		var entityID int
+		var value string
+		if rows.Scan(&entityID, &value) == nil {
+			result[entityID] = value
+		}
+	}
+	return result
 }
 
 // EncodeUID encodes an integer item ID as a base64 UID.

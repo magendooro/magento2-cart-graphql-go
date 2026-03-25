@@ -777,6 +777,17 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 	availPayments := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
 	selectedPayment, _ := s.paymentRepo.GetSelectedMethod(ctx, cart.EntityID)
 
+	// Build media base URL for product thumbnails.
+	mediaBaseURL := strings.TrimRight(s.cp.Get("web/secure/base_media_url", storeID), "/")
+	if mediaBaseURL == "" {
+		baseURL := strings.TrimRight(s.cp.Get("web/secure/base_url", storeID), "/")
+		if baseURL == "" {
+			baseURL = "http://localhost"
+		}
+		mediaBaseURL = baseURL + "/media"
+	}
+	mediaBaseURL += "/catalog/product"
+
 	return s.mapper.MapCart(ctx, cartmapper.MapCartInput{
 		Cart:            cart,
 		Items:           items,
@@ -786,6 +797,7 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 		AvailPayments:   availPayments,
 		SelectedPayment: selectedPayment,
 		MaskedID:        maskedID,
+		MediaBaseURL:    mediaBaseURL,
 	}), nil
 }
 
