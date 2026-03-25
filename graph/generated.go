@@ -153,6 +153,12 @@ type ComplexityRoot struct {
 		Message func(childComplexity int) int
 	}
 
+	CheckoutUserInputError struct {
+		Code    func(childComplexity int) int
+		Message func(childComplexity int) int
+		Path    func(childComplexity int) int
+	}
+
 	ConfigurableCartItem struct {
 		ConfigurableOptions func(childComplexity int) int
 		ConfiguredVariant   func(childComplexity int) int
@@ -197,6 +203,7 @@ type ComplexityRoot struct {
 		PlaceOrder                 func(childComplexity int, input *model.PlaceOrderInput) int
 		RemoveCouponFromCart       func(childComplexity int, input *model.RemoveCouponFromCartInput) int
 		RemoveItemFromCart         func(childComplexity int, input *model.RemoveItemFromCartInput) int
+		ReorderItems               func(childComplexity int, orderNumber string) int
 		SetBillingAddressOnCart    func(childComplexity int, input *model.SetBillingAddressOnCartInput) int
 		SetGuestEmailOnCart        func(childComplexity int, input *model.SetGuestEmailOnCartInput) int
 		SetPaymentMethodOnCart     func(childComplexity int, input *model.SetPaymentMethodOnCartInput) int
@@ -231,6 +238,11 @@ type ComplexityRoot struct {
 
 	RemoveItemFromCartOutput struct {
 		Cart func(childComplexity int) int
+	}
+
+	ReorderItemsOutput struct {
+		Cart            func(childComplexity int) int
+		UserInputErrors func(childComplexity int) int
 	}
 
 	SelectedBundleOption struct {
@@ -332,6 +344,7 @@ type MutationResolver interface {
 	AssignCustomerToGuestCart(ctx context.Context, cartID string) (*model.Cart, error)
 	EstimateShippingMethods(ctx context.Context, input model.EstimateShippingMethodsInput) ([]*model.AvailableShippingMethod, error)
 	EstimateTotals(ctx context.Context, input model.EstimateTotalsInput) (*model.EstimateTotalsOutput, error)
+	ReorderItems(ctx context.Context, orderNumber string) (*model.ReorderItemsOutput, error)
 }
 type QueryResolver interface {
 	Cart(ctx context.Context, cartID string) (*model.Cart, error)
@@ -765,6 +778,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CartUserInputError.Message(childComplexity), true
 
+	case "CheckoutUserInputError.code":
+		if e.ComplexityRoot.CheckoutUserInputError.Code == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutUserInputError.Code(childComplexity), true
+	case "CheckoutUserInputError.message":
+		if e.ComplexityRoot.CheckoutUserInputError.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutUserInputError.Message(childComplexity), true
+	case "CheckoutUserInputError.path":
+		if e.ComplexityRoot.CheckoutUserInputError.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CheckoutUserInputError.Path(childComplexity), true
+
 	case "ConfigurableCartItem.configurable_options":
 		if e.ComplexityRoot.ConfigurableCartItem.ConfigurableOptions == nil {
 			break
@@ -993,6 +1025,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveItemFromCart(childComplexity, args["input"].(*model.RemoveItemFromCartInput)), true
+	case "Mutation.reorderItems":
+		if e.ComplexityRoot.Mutation.ReorderItems == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_reorderItems_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ReorderItems(childComplexity, args["orderNumber"].(string)), true
 	case "Mutation.setBillingAddressOnCart":
 		if e.ComplexityRoot.Mutation.SetBillingAddressOnCart == nil {
 			break
@@ -1130,6 +1173,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RemoveItemFromCartOutput.Cart(childComplexity), true
+
+	case "ReorderItemsOutput.cart":
+		if e.ComplexityRoot.ReorderItemsOutput.Cart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReorderItemsOutput.Cart(childComplexity), true
+	case "ReorderItemsOutput.userInputErrors":
+		if e.ComplexityRoot.ReorderItemsOutput.UserInputErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReorderItemsOutput.UserInputErrors(childComplexity), true
 
 	case "SelectedBundleOption.label":
 		if e.ComplexityRoot.SelectedBundleOption.Label == nil {
@@ -1643,6 +1699,17 @@ func (ec *executionContext) field_Mutation_removeItemFromCart_args(ctx context.C
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_reorderItems_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "orderNumber", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["orderNumber"] = arg0
 	return args, nil
 }
 
@@ -3964,6 +4031,93 @@ func (ec *executionContext) fieldContext_CartUserInputError_message(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _CheckoutUserInputError_code(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutUserInputError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutUserInputError_code,
+		func(ctx context.Context) (any, error) {
+			return obj.Code, nil
+		},
+		nil,
+		ec.marshalNCheckoutUserInputErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorCodes,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutUserInputError_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutUserInputError",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type CheckoutUserInputErrorCodes does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutUserInputError_message(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutUserInputError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutUserInputError_message,
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutUserInputError_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutUserInputError",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CheckoutUserInputError_path(ctx context.Context, field graphql.CollectedField, obj *model.CheckoutUserInputError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CheckoutUserInputError_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CheckoutUserInputError_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CheckoutUserInputError",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ConfigurableCartItem_uid(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5388,6 +5542,53 @@ func (ec *executionContext) fieldContext_Mutation_estimateTotals(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_reorderItems(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_reorderItems,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ReorderItems(ctx, fc.Args["orderNumber"].(string))
+		},
+		nil,
+		ec.marshalNReorderItemsOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐReorderItemsOutput,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_reorderItems(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cart":
+				return ec.fieldContext_ReorderItemsOutput_cart(ctx, field)
+			case "userInputErrors":
+				return ec.fieldContext_ReorderItemsOutput_userInputErrors(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ReorderItemsOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_reorderItems_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PlaceOrderError_code(ctx context.Context, field graphql.CollectedField, obj *model.PlaceOrderError) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5901,6 +6102,96 @@ func (ec *executionContext) fieldContext_RemoveItemFromCartOutput_cart(_ context
 				return ec.fieldContext_Cart_prices(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReorderItemsOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.ReorderItemsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ReorderItemsOutput_cart,
+		func(ctx context.Context) (any, error) {
+			return obj.Cart, nil
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ReorderItemsOutput_cart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReorderItemsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReorderItemsOutput_userInputErrors(ctx context.Context, field graphql.CollectedField, obj *model.ReorderItemsOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ReorderItemsOutput_userInputErrors,
+		func(ctx context.Context) (any, error) {
+			return obj.UserInputErrors, nil
+		},
+		nil,
+		ec.marshalNCheckoutUserInputError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ReorderItemsOutput_userInputErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReorderItemsOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "code":
+				return ec.fieldContext_CheckoutUserInputError_code(ctx, field)
+			case "message":
+				return ec.fieldContext_CheckoutUserInputError_message(ctx, field)
+			case "path":
+				return ec.fieldContext_CheckoutUserInputError_path(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CheckoutUserInputError", field.Name)
 		},
 	}
 	return fc, nil
@@ -10553,6 +10844,55 @@ func (ec *executionContext) _CartUserInputError(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var checkoutUserInputErrorImplementors = []string{"CheckoutUserInputError"}
+
+func (ec *executionContext) _CheckoutUserInputError(ctx context.Context, sel ast.SelectionSet, obj *model.CheckoutUserInputError) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, checkoutUserInputErrorImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CheckoutUserInputError")
+		case "code":
+			out.Values[i] = ec._CheckoutUserInputError_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._CheckoutUserInputError_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._CheckoutUserInputError_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var configurableCartItemImplementors = []string{"ConfigurableCartItem", "CartItemInterface"}
 
 func (ec *executionContext) _ConfigurableCartItem(ctx context.Context, sel ast.SelectionSet, obj *model.ConfigurableCartItem) graphql.Marshaler {
@@ -10868,6 +11208,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_estimateTotals(ctx, field)
 			})
+		case "reorderItems":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_reorderItems(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11163,6 +11510,50 @@ func (ec *executionContext) _RemoveItemFromCartOutput(ctx context.Context, sel a
 			out.Values[i] = graphql.MarshalString("RemoveItemFromCartOutput")
 		case "cart":
 			out.Values[i] = ec._RemoveItemFromCartOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var reorderItemsOutputImplementors = []string{"ReorderItemsOutput"}
+
+func (ec *executionContext) _ReorderItemsOutput(ctx context.Context, sel ast.SelectionSet, obj *model.ReorderItemsOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reorderItemsOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReorderItemsOutput")
+		case "cart":
+			out.Values[i] = ec._ReorderItemsOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userInputErrors":
+			out.Values[i] = ec._ReorderItemsOutput_userInputErrors(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -12285,6 +12676,42 @@ func (ec *executionContext) marshalNCartUserInputErrorType2githubᚗcomᚋmagend
 	return v
 }
 
+func (ec *executionContext) marshalNCheckoutUserInputError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CheckoutUserInputError) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCheckoutUserInputError2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputError(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCheckoutUserInputError2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputError(ctx context.Context, sel ast.SelectionSet, v *model.CheckoutUserInputError) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CheckoutUserInputError(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCheckoutUserInputErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorCodes(ctx context.Context, v any) (model.CheckoutUserInputErrorCodes, error) {
+	var res model.CheckoutUserInputErrorCodes
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCheckoutUserInputErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCheckoutUserInputErrorCodes(ctx context.Context, sel ast.SelectionSet, v model.CheckoutUserInputErrorCodes) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNEnteredOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEnteredOptionInput(ctx context.Context, v any) (*model.EnteredOptionInput, error) {
 	res, err := ec.unmarshalInputEnteredOptionInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
@@ -12402,6 +12829,20 @@ func (ec *executionContext) unmarshalNPlaceOrderErrorCodes2githubᚗcomᚋmagend
 
 func (ec *executionContext) marshalNPlaceOrderErrorCodes2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPlaceOrderErrorCodes(ctx context.Context, sel ast.SelectionSet, v model.PlaceOrderErrorCodes) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNReorderItemsOutput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐReorderItemsOutput(ctx context.Context, sel ast.SelectionSet, v model.ReorderItemsOutput) graphql.Marshaler {
+	return ec._ReorderItemsOutput(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNReorderItemsOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐReorderItemsOutput(ctx context.Context, sel ast.SelectionSet, v *model.ReorderItemsOutput) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReorderItemsOutput(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSelectedBundleOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedBundleOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedBundleOption) graphql.Marshaler {

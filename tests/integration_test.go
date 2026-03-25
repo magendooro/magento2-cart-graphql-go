@@ -21,6 +21,9 @@ import (
 
 var testHandler http.Handler
 var testDB *sql.DB
+var testJWTManager interface {
+	Create(customerID int) (string, error)
+}
 
 func envOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -54,6 +57,7 @@ func TestMain(m *testing.M) {
 
 	cryptKey := envOrDefault("MAGENTO_CRYPT_KEY", "base64KjBr8ZM6bmK4xIWfk2/K0+xHEn+Ym6/Ogyl7Y7otzso=")
 	jwtManager := jwt.NewManager(cryptKey, 60)
+	testJWTManager = jwtManager
 
 	cp, err := commonconfig.NewConfigProvider(db)
 	if err != nil {
@@ -1322,4 +1326,101 @@ func TestTaxInclusivePricing(t *testing.T) {
 		t.Errorf("subtotal_including_tax (%.2f) < subtotal_excluding_tax (%.2f)",
 			prices.SubtotalIncludingTax.Value, prices.SubtotalExcludingTax.Value)
 	}
+}
+
+// ─── ReorderItems Tests ────────────────────────────────────────────────────
+
+func TestReorderItemsUnauthenticated(t *testing.T) {
+	resp := doQuery(t, `mutation { reorderItems(orderNumber: "000000001") { cart { id } userInputErrors { code message } } }`, "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected auth error for unauthenticated reorderItems")
+	}
+	if resp.Errors[0].Message != "The current customer isn't authorized." {
+		t.Errorf("unexpected error: %s", resp.Errors[0].Message)
+	}
+}
+
+func TestReorderItemsOrderNotFound(t *testing.T) {
+	token, err := testJWTManager.Create(1)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	resp := doQuery(t, `mutation { reorderItems(orderNumber: "DOES-NOT-EXIST") { cart { id } userInputErrors { code message } } }`, token)
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected error for non-existent order")
+	}
+}
+
+func TestReorderItems(t *testing.T) {
+	// Find a placed order in the DB to reorder from (created by other tests via PlaceOrder).
+	// We look for any order belonging to a customer with a known customer ID.
+	var incrementID string
+	var customerID int
+	err := testDB.QueryRow(`
+		SELECT so.increment_id, so.customer_id
+		FROM sales_order so
+		WHERE so.customer_id IS NOT NULL AND so.customer_id > 0
+		ORDER BY so.entity_id DESC
+		LIMIT 1`).Scan(&incrementID, &customerID)
+	if err != nil {
+		t.Skip("no customer orders in DB — run comparison tests first")
+	}
+
+	token, err := testJWTManager.Create(customerID)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		reorderItems(orderNumber: "%s") {
+			cart {
+				id
+				total_quantity
+				items {
+					uid
+					quantity
+					product { sku name }
+				}
+			}
+			userInputErrors { code message path }
+		}
+	}`, incrementID), token)
+
+	if len(resp.Errors) > 0 {
+		t.Fatalf("reorderItems error: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		ReorderItems struct {
+			Cart struct {
+				ID            string  `json:"id"`
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					UID      string  `json:"uid"`
+					Quantity float64 `json:"quantity"`
+					Product  struct {
+						Sku string `json:"sku"`
+					} `json:"product"`
+				} `json:"items"`
+			} `json:"cart"`
+			UserInputErrors []struct {
+				Code    string   `json:"code"`
+				Message string   `json:"message"`
+				Path    []string `json:"path"`
+			} `json:"userInputErrors"`
+		} `json:"reorderItems"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if data.ReorderItems.Cart.ID == "" {
+		t.Error("expected non-empty cart ID")
+	}
+	if data.ReorderItems.Cart.TotalQuantity <= 0 && len(data.ReorderItems.UserInputErrors) == 0 {
+		t.Error("expected items in cart or userInputErrors explaining why not")
+	}
+	t.Logf("PASS: reorderItems order=%s customerID=%d cartID=%s qty=%.0f errors=%d",
+		incrementID, customerID,
+		data.ReorderItems.Cart.ID,
+		data.ReorderItems.Cart.TotalQuantity,
+		len(data.ReorderItems.UserInputErrors))
 }

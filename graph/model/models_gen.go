@@ -188,6 +188,12 @@ type CartUserInputError struct {
 	Message string                 `json:"message"`
 }
 
+type CheckoutUserInputError struct {
+	Code    CheckoutUserInputErrorCodes `json:"code"`
+	Message string                      `json:"message"`
+	Path    []string                    `json:"path"`
+}
+
 type ConfigurableCartItem struct {
 	UID                 string                        `json:"uid"`
 	Quantity            float64                       `json:"quantity"`
@@ -307,6 +313,11 @@ type RemoveItemFromCartInput struct {
 
 type RemoveItemFromCartOutput struct {
 	Cart *Cart `json:"cart"`
+}
+
+type ReorderItemsOutput struct {
+	Cart            *Cart                     `json:"cart"`
+	UserInputErrors []*CheckoutUserInputError `json:"userInputErrors"`
 }
 
 type SelectedBundleOption struct {
@@ -560,6 +571,67 @@ func (e *CartUserInputErrorType) UnmarshalJSON(b []byte) error {
 }
 
 func (e CartUserInputErrorType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CheckoutUserInputErrorCodes string
+
+const (
+	CheckoutUserInputErrorCodesReorderNotAvailable CheckoutUserInputErrorCodes = "REORDER_NOT_AVAILABLE"
+	CheckoutUserInputErrorCodesProductNotFound     CheckoutUserInputErrorCodes = "PRODUCT_NOT_FOUND"
+	CheckoutUserInputErrorCodesNotSalable          CheckoutUserInputErrorCodes = "NOT_SALABLE"
+	CheckoutUserInputErrorCodesInsufficientStock   CheckoutUserInputErrorCodes = "INSUFFICIENT_STOCK"
+	CheckoutUserInputErrorCodesUndefined           CheckoutUserInputErrorCodes = "UNDEFINED"
+)
+
+var AllCheckoutUserInputErrorCodes = []CheckoutUserInputErrorCodes{
+	CheckoutUserInputErrorCodesReorderNotAvailable,
+	CheckoutUserInputErrorCodesProductNotFound,
+	CheckoutUserInputErrorCodesNotSalable,
+	CheckoutUserInputErrorCodesInsufficientStock,
+	CheckoutUserInputErrorCodesUndefined,
+}
+
+func (e CheckoutUserInputErrorCodes) IsValid() bool {
+	switch e {
+	case CheckoutUserInputErrorCodesReorderNotAvailable, CheckoutUserInputErrorCodesProductNotFound, CheckoutUserInputErrorCodesNotSalable, CheckoutUserInputErrorCodesInsufficientStock, CheckoutUserInputErrorCodesUndefined:
+		return true
+	}
+	return false
+}
+
+func (e CheckoutUserInputErrorCodes) String() string {
+	return string(e)
+}
+
+func (e *CheckoutUserInputErrorCodes) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CheckoutUserInputErrorCodes(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CheckoutUserInputErrorCodes", str)
+	}
+	return nil
+}
+
+func (e CheckoutUserInputErrorCodes) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CheckoutUserInputErrorCodes) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CheckoutUserInputErrorCodes) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

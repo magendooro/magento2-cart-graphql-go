@@ -60,6 +60,9 @@ type Mutation {
 
     """Estimate totals for a cart with a temporary address and shipping method."""
     estimateTotals(input: EstimateTotalsInput!): EstimateTotalsOutput
+
+    """Re-add items from a previous order to the customer's active cart."""
+    reorderItems(orderNumber: String!): ReorderItemsOutput!
 }
 
 # ─── Cart Type ───────────────────────────────────────────────────────────────
@@ -474,6 +477,17 @@ type EstimateTotalsOutput {
     discount: Money
 }
 
+type ReorderItemsOutput {
+    cart: Cart!
+    userInputErrors: [CheckoutUserInputError!]!
+}
+
+type CheckoutUserInputError {
+    code: CheckoutUserInputErrorCodes!
+    message: String!
+    path: [String!]!
+}
+
 # ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum PlaceOrderErrorCodes {
@@ -481,6 +495,14 @@ enum PlaceOrderErrorCodes {
     CART_NOT_ACTIVE
     GUEST_EMAIL_MISSING
     UNABLE_TO_PLACE_ORDER
+    UNDEFINED
+}
+
+enum CheckoutUserInputErrorCodes {
+    REORDER_NOT_AVAILABLE
+    PRODUCT_NOT_FOUND
+    NOT_SALABLE
+    INSUFFICIENT_STOCK
     UNDEFINED
 }
 

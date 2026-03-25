@@ -144,6 +144,11 @@ func (r *mutationResolver) EstimateTotals(ctx context.Context, input model.Estim
 	return r.CartService.EstimateTotals(ctx, input)
 }
 
+// ReorderItems is the resolver for the reorderItems field.
+func (r *mutationResolver) ReorderItems(ctx context.Context, orderNumber string) (*model.ReorderItemsOutput, error) {
+	return r.CartService.ReorderItems(ctx, orderNumber)
+}
+
 // Cart is the resolver for the cart field.
 func (r *queryResolver) Cart(ctx context.Context, cartID string) (*model.Cart, error) {
 	return r.CartService.GetCart(ctx, cartID)

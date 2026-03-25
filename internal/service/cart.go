@@ -1171,6 +1171,170 @@ func (s *CartService) loadCustomerAddress(ctx context.Context, addressID, custom
 	return &f, nil
 }
 
+// ── ReorderItems ──────────────────────────────────────────────────────────────
+
+// ReorderItems re-adds top-level items from a previous order to the customer's active cart.
+func (s *CartService) ReorderItems(ctx context.Context, orderNumber string) (*model.ReorderItemsOutput, error) {
+	customerID := middleware.GetCustomerID(ctx)
+	if customerID == 0 {
+		return nil, mgerrors.ErrUnauthorized
+	}
+
+	db := s.orderRepo.DB()
+	storeID := middleware.GetStoreID(ctx)
+
+	// 1. Verify order belongs to customer
+	var orderID int
+	err := db.QueryRowContext(ctx,
+		"SELECT entity_id FROM sales_order WHERE increment_id = ? AND customer_id = ?",
+		orderNumber, customerID,
+	).Scan(&orderID)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot find order %s.", orderNumber)
+	}
+
+	// 2. Load top-level order items
+	rows, err := db.QueryContext(ctx, `
+		SELECT sku, product_type, qty_ordered, COALESCE(product_options, '')
+		FROM sales_order_item
+		WHERE order_id = ? AND parent_item_id IS NULL`,
+		orderID)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot load items for order %s.", orderNumber)
+	}
+	defer rows.Close()
+
+	type orderItemRow struct {
+		sku, productType, productOptions string
+		qty                              float64
+	}
+	var orderItems []orderItemRow
+	for rows.Next() {
+		var item orderItemRow
+		rows.Scan(&item.sku, &item.productType, &item.qty, &item.productOptions)
+		orderItems = append(orderItems, item)
+	}
+	rows.Close()
+
+	// 3. Ensure customer has an active cart
+	var quoteID int
+	activeCart, err := s.cartRepo.GetActiveByCustomerID(ctx, customerID, storeID)
+	if err != nil {
+		quoteID, err = s.cartRepo.Create(ctx, storeID, &customerID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		quoteID = activeCart.EntityID
+	}
+	maskedID, err := s.maskRepo.GetMaskedID(ctx, quoteID)
+	if err != nil {
+		return nil, err
+	}
+	cartData, _ := s.cartRepo.GetByID(ctx, quoteID)
+	customerGroupID := 1
+	if cartData != nil {
+		customerGroupID = cartData.CustomerGroupID
+	}
+
+	// 4. Add each item, collecting per-item errors
+	var userErrors []*model.CheckoutUserInputError
+	for _, item := range orderItems {
+		input := &model.CartItemInput{
+			Sku:             item.sku,
+			Quantity:        item.qty,
+			SelectedOptions: reorderSelectedOptions(item.productType, item.productOptions),
+		}
+
+		product, err := s.lookupProduct(ctx, item.sku, storeID, customerGroupID)
+		if err != nil {
+			userErrors = append(userErrors, reorderInputErr(model.CheckoutUserInputErrorCodesProductNotFound, carterr.ErrProductNotFound(item.sku).Error(), item.sku))
+			continue
+		}
+		if product.Status != 1 {
+			userErrors = append(userErrors, reorderInputErr(model.CheckoutUserInputErrorCodesNotSalable, carterr.ErrNotSalable(item.sku).Error(), item.sku))
+			continue
+		}
+		if product.StockStatus != 1 {
+			userErrors = append(userErrors, reorderInputErr(model.CheckoutUserInputErrorCodesInsufficientStock, carterr.ErrOutOfStock(item.sku).Error(), item.sku))
+			continue
+		}
+
+		var addErr error
+		switch {
+		case product.ProductType == "configurable" && len(input.SelectedOptions) > 0:
+			addErr = s.addConfigurableProduct(ctx, quoteID, storeID, customerGroupID, product, input)
+		case product.ProductType == "bundle" && len(input.SelectedOptions) > 0:
+			addErr = s.addBundleProduct(ctx, quoteID, storeID, customerGroupID, product, input)
+		default:
+			_, addErr = s.itemRepo.Add(ctx, quoteID, product.ProductID, input.Sku, product.Name, product.ProductType, input.Quantity, product.Price)
+		}
+		if addErr != nil {
+			userErrors = append(userErrors, reorderInputErr(model.CheckoutUserInputErrorCodesUndefined, addErr.Error(), item.sku))
+		}
+	}
+
+	if err := s.recalculateTotals(ctx, quoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed after reorder")
+	}
+
+	cartModel, _ := s.GetCart(ctx, maskedID)
+	if userErrors == nil {
+		userErrors = []*model.CheckoutUserInputError{}
+	}
+	return &model.ReorderItemsOutput{Cart: cartModel, UserInputErrors: userErrors}, nil
+}
+
+// reorderSelectedOptions reconstructs SelectedOptions UIDs from a sales_order_item
+// product_options JSON. Returns nil for simple products or unparseable JSON.
+func reorderSelectedOptions(productType, productOptionsJSON string) []string {
+	if productOptionsJSON == "" || (productType != "configurable" && productType != "bundle") {
+		return nil
+	}
+	var opts struct {
+		InfoBuyRequest struct {
+			SuperAttribute  map[string]json.RawMessage `json:"super_attribute"`
+			BundleOption    map[string]json.RawMessage `json:"bundle_option"`
+			BundleOptionQty map[string]json.RawMessage `json:"bundle_option_qty"`
+		} `json:"info_buyRequest"`
+	}
+	if err := json.Unmarshal([]byte(productOptionsJSON), &opts); err != nil {
+		return nil
+	}
+
+	rawString := func(r json.RawMessage) string {
+		s := strings.Trim(string(r), `"`)
+		return s
+	}
+
+	var selected []string
+	switch productType {
+	case "configurable":
+		for attrIDStr, optIDRaw := range opts.InfoBuyRequest.SuperAttribute {
+			optIDStr := rawString(optIDRaw)
+			uid := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("configurable/%s/%s", attrIDStr, optIDStr)))
+			selected = append(selected, uid)
+		}
+	case "bundle":
+		for optIDStr, selIDRaw := range opts.InfoBuyRequest.BundleOption {
+			selIDStr := rawString(selIDRaw)
+			qty := 1.0
+			if qtyRaw, ok := opts.InfoBuyRequest.BundleOptionQty[optIDStr]; ok {
+				if q, err := strconv.ParseFloat(rawString(qtyRaw), 64); err == nil {
+					qty = q
+				}
+			}
+			uid := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("bundle/%s/%s/%v", optIDStr, selIDStr, qty)))
+			selected = append(selected, uid)
+		}
+	}
+	return selected
+}
+
+func reorderInputErr(code model.CheckoutUserInputErrorCodes, message, sku string) *model.CheckoutUserInputError {
+	return &model.CheckoutUserInputError{Code: code, Message: message, Path: []string{sku}}
+}
+
 // jsonMarshalAttrs encodes a map[attrID]optionID as a JSON string map ({"142":"166",...}).
 func jsonMarshalAttrs(superAttributes map[int]int) (string, error) {
 	m := make(map[string]string, len(superAttributes))
