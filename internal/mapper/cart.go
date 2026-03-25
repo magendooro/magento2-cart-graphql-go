@@ -204,17 +204,16 @@ func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartA
 	if a.ShippingMethod != nil {
 		parts := strings.SplitN(*a.ShippingMethod, "_", 2)
 		if len(parts) == 2 {
-			desc := ""
-			if a.ShippingDescription != nil {
-				desc = *a.ShippingDescription
-			}
-			// shipping_description is stored as "{carrier_title} - {method_title}".
-			// Split on the first " - " to recover the human-readable titles.
+			// Resolve human-readable titles from the already-collected rates,
+			// which were produced by the carrier using its config values.
 			carrierTitle := parts[0]
-			methodTitle := desc
-			if idx := strings.Index(desc, " - "); idx != -1 {
-				carrierTitle = desc[:idx]
-				methodTitle = desc[idx+3:]
+			methodTitle := parts[1]
+			for _, r := range rates {
+				if r.CarrierCode == parts[0] && r.MethodCode == parts[1] {
+					carrierTitle = r.CarrierTitle
+					methodTitle = r.MethodTitle
+					break
+				}
 			}
 			shippingMoney := &model.Money{Value: &a.ShippingAmount, Currency: nil}
 			addr.SelectedShippingMethod = &model.SelectedShippingMethod{
