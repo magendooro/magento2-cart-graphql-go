@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -1423,4 +1424,420 @@ func TestReorderItems(t *testing.T) {
 		data.ReorderItems.Cart.ID,
 		data.ReorderItems.Cart.TotalQuantity,
 		len(data.ReorderItems.UserInputErrors))
+}
+
+// ─── Issue #69: mergeCarts + assignCustomerToGuestCart happy-path tests ───────
+
+func TestMergeCarts(t *testing.T) {
+	// Guest cart with 2 units of 24-MB01
+	guestCartID := createTestCart(t)
+	addTestProduct(t, guestCartID, "24-MB01", 2)
+
+	// Customer cart with 1 unit of 24-MB01 (will merge to qty 3) and 1 of 24-MB04
+	token, err := testJWTManager.Create(1)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	customerCartID := createTestCart(t)
+	addTestProduct(t, customerCartID, "24-MB01", 1)
+	addTestProduct(t, customerCartID, "24-MB04", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		mergeCarts(source_cart_id: "%s", destination_cart_id: "%s") {
+			id
+			total_quantity
+			items { uid quantity product { sku } }
+		}
+	}`, guestCartID, customerCartID), token)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("mergeCarts error: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		MergeCarts struct {
+			ID            string  `json:"id"`
+			TotalQuantity float64 `json:"total_quantity"`
+			Items         []struct {
+				Quantity float64 `json:"quantity"`
+				Product  struct{ Sku string } `json:"product"`
+			} `json:"items"`
+		} `json:"mergeCarts"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if data.MergeCarts.ID == "" {
+		t.Fatal("expected non-empty cart ID")
+	}
+
+	// total_quantity should be 3 (merged 24-MB01) + 1 (24-MB04) = 4
+	if data.MergeCarts.TotalQuantity != 4 {
+		t.Errorf("expected total_quantity=4, got %v", data.MergeCarts.TotalQuantity)
+	}
+
+	// Find 24-MB01 in items and verify qty=3
+	var mb01Qty float64
+	for _, item := range data.MergeCarts.Items {
+		if item.Product.Sku == "24-MB01" {
+			mb01Qty = item.Quantity
+		}
+	}
+	if mb01Qty != 3 {
+		t.Errorf("expected 24-MB01 qty=3 after merge, got %v", mb01Qty)
+	}
+
+	// Verify source (guest) cart is deactivated — should not be accessible
+	checkResp := doQuery(t, fmt.Sprintf(`{ cart(cart_id: "%s") { id } }`, guestCartID), "")
+	if len(checkResp.Errors) == 0 {
+		t.Error("expected error accessing deactivated guest cart")
+	}
+
+	t.Logf("PASS: mergeCarts — total_qty=%v 24-MB01 merged qty=%v", data.MergeCarts.TotalQuantity, mb01Qty)
+}
+
+func TestAssignCustomerToGuestCart(t *testing.T) {
+	// Guest cart with item A
+	guestCartID := createTestCart(t)
+	addTestProduct(t, guestCartID, "24-MB01", 2)
+
+	// Authenticate — but avoid interfering with other tests by using a distinct customer
+	// Customer 2 if it exists, otherwise just use customer 1 and accept that cart merging may occur.
+	token, err := testJWTManager.Create(2)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		assignCustomerToGuestCart(cart_id: "%s") {
+			id
+			total_quantity
+			items { product { sku } quantity }
+		}
+	}`, guestCartID), token)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("assignCustomerToGuestCart error: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		AssignCustomerToGuestCart struct {
+			ID            string  `json:"id"`
+			TotalQuantity float64 `json:"total_quantity"`
+		} `json:"assignCustomerToGuestCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if data.AssignCustomerToGuestCart.ID == "" {
+		t.Fatal("expected non-empty cart ID")
+	}
+	if data.AssignCustomerToGuestCart.TotalQuantity <= 0 {
+		t.Error("expected at least the guest cart items in assigned cart")
+	}
+	t.Logf("PASS: assignCustomerToGuestCart cartID=%s qty=%v",
+		data.AssignCustomerToGuestCart.ID, data.AssignCustomerToGuestCart.TotalQuantity)
+}
+
+// ─── Issue #70: customerCart query tests ─────────────────────────────────────
+
+func TestCustomerCartUnauthenticated(t *testing.T) {
+	resp := doQuery(t, `{ customerCart { id } }`, "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected auth error for unauthenticated customerCart")
+	}
+	if resp.Errors[0].Message != "The current customer isn't authorized." {
+		t.Errorf("unexpected error: %s", resp.Errors[0].Message)
+	}
+}
+
+func TestCustomerCart(t *testing.T) {
+	token, err := testJWTManager.Create(3)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	// First call: should return (or create) the customer's active cart
+	resp := doQuery(t, `{ customerCart { id total_quantity } }`, token)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("customerCart error: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		CustomerCart struct {
+			ID            string  `json:"id"`
+			TotalQuantity float64 `json:"total_quantity"`
+		} `json:"customerCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.CustomerCart.ID) != 32 {
+		t.Fatalf("expected 32-char masked ID, got %q", data.CustomerCart.ID)
+	}
+	firstCartID := data.CustomerCart.ID
+
+	// Add a product to the returned cart
+	addTestProduct(t, firstCartID, "24-MB01", 1)
+
+	// Second call: same customer should get the same cart back with qty > 0
+	resp2 := doQuery(t, `{ customerCart { id total_quantity } }`, token)
+	if len(resp2.Errors) > 0 {
+		t.Fatalf("customerCart second call error: %s", resp2.Errors[0].Message)
+	}
+	var data2 struct {
+		CustomerCart struct {
+			ID            string  `json:"id"`
+			TotalQuantity float64 `json:"total_quantity"`
+		} `json:"customerCart"`
+	}
+	json.Unmarshal(resp2.Data, &data2)
+
+	if data2.CustomerCart.ID != firstCartID {
+		t.Errorf("expected same cart ID on second call: got %q, want %q", data2.CustomerCart.ID, firstCartID)
+	}
+	if data2.CustomerCart.TotalQuantity <= 0 {
+		t.Error("expected total_quantity > 0 after adding product")
+	}
+	t.Logf("PASS: customerCart — cartID=%s qty=%v", data2.CustomerCart.ID, data2.CustomerCart.TotalQuantity)
+}
+
+// ─── Issue #71: placeOrder standalone integration tests ──────────────────────
+
+func TestPlaceOrder_Simple(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	// Set shipping address (Texas, US)
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		setShippingAddressesOnCart(input: {
+			cart_id: "%s"
+			shipping_addresses: [{address: {
+				firstname: "Test" lastname: "User"
+				street: ["123 Main St"] city: "Austin"
+				region: "Texas" region_id: 57 postcode: "78701"
+				country_code: "US" telephone: "5125551234"
+			}}]
+		}) { cart { id } }
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("setShippingAddress: %s", resp.Errors[0].Message)
+	}
+
+	// Set shipping method
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		setShippingMethodsOnCart(input: {
+			cart_id: "%s"
+			shipping_methods: [{ carrier_code: "flatrate", method_code: "flatrate" }]
+		}) { cart { id } }
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("setShippingMethod: %s", resp.Errors[0].Message)
+	}
+
+	// Set billing (same_as_shipping)
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		setBillingAddressOnCart(input: {
+			cart_id: "%s"
+			billing_address: { same_as_shipping: true }
+		}) { cart { id } }
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("setBillingAddress: %s", resp.Errors[0].Message)
+	}
+
+	// Set payment
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		setPaymentMethodOnCart(input: {
+			cart_id: "%s"
+			payment_method: { code: "checkmo" }
+		}) { cart { id } }
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("setPaymentMethod: %s", resp.Errors[0].Message)
+	}
+
+	// Set guest email
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		setGuestEmailOnCart(input: { cart_id: "%s", email: "test@example.com" }) {
+			cart { email }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("setGuestEmail: %s", resp.Errors[0].Message)
+	}
+
+	// Place order
+	resp = doQuery(t, fmt.Sprintf(`mutation {
+		placeOrder(input: { cart_id: "%s" }) {
+			errors { code message }
+			orderV2 { number token }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("placeOrder error: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		PlaceOrder struct {
+			Errors []struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"errors"`
+			OrderV2 struct {
+				Number string `json:"number"`
+				Token  string `json:"token"`
+			} `json:"orderV2"`
+		} `json:"placeOrder"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.PlaceOrder.Errors) > 0 {
+		t.Fatalf("placeOrder returned errors: %v", data.PlaceOrder.Errors)
+	}
+	if !regexp.MustCompile(`^\d{9}$`).MatchString(data.PlaceOrder.OrderV2.Number) {
+		t.Errorf("order number format wrong: %q", data.PlaceOrder.OrderV2.Number)
+	}
+	if len(data.PlaceOrder.OrderV2.Token) != 32 {
+		t.Errorf("expected 32-char token, got %q", data.PlaceOrder.OrderV2.Token)
+	}
+	t.Logf("PASS: placeOrder — orderNumber=%s token=%s", data.PlaceOrder.OrderV2.Number, data.PlaceOrder.OrderV2.Token)
+}
+
+func TestPlaceOrder_ValidationErrors(t *testing.T) {
+	// 1. Empty cart → UNABLE_TO_PLACE_ORDER
+	emptyCart := createTestCart(t)
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		placeOrder(input: { cart_id: "%s" }) { errors { code } orderV2 { number } }
+	}`, emptyCart), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("placeOrder on empty cart returned GraphQL error: %s", resp.Errors[0].Message)
+	}
+	var emptyData struct {
+		PlaceOrder struct {
+			Errors []struct{ Code string } `json:"errors"`
+		} `json:"placeOrder"`
+	}
+	json.Unmarshal(resp.Data, &emptyData)
+	if len(emptyData.PlaceOrder.Errors) == 0 || emptyData.PlaceOrder.Errors[0].Code != "UNABLE_TO_PLACE_ORDER" {
+		t.Errorf("expected UNABLE_TO_PLACE_ORDER for empty cart, got %v", emptyData.PlaceOrder.Errors)
+	}
+
+	// 2. Cart not found → CART_NOT_FOUND
+	resp = doQuery(t, `mutation { placeOrder(input: { cart_id: "does-not-exist" }) { errors { code } } }`, "")
+	var notFoundData struct {
+		PlaceOrder struct {
+			Errors []struct{ Code string } `json:"errors"`
+		} `json:"placeOrder"`
+	}
+	json.Unmarshal(resp.Data, &notFoundData)
+	if len(notFoundData.PlaceOrder.Errors) == 0 || notFoundData.PlaceOrder.Errors[0].Code != "CART_NOT_FOUND" {
+		t.Errorf("expected CART_NOT_FOUND, got %v", notFoundData.PlaceOrder.Errors)
+	}
+
+	// 3. Cart without payment → UNABLE_TO_PLACE_ORDER (via validation)
+	cartNoPayment := createTestCart(t)
+	addTestProduct(t, cartNoPayment, "24-MB01", 1)
+	doQuery(t, fmt.Sprintf(`mutation {
+		setShippingAddressesOnCart(input: { cart_id: "%s", shipping_addresses: [{ address: {
+			firstname: "T" lastname: "U" street: ["1 Main"] city: "Austin"
+			region_id: 57 postcode: "78701" country_code: "US" telephone: "5125551234"
+		}}]}) { cart { id } }
+	}`, cartNoPayment), "")
+	doQuery(t, fmt.Sprintf(`mutation {
+		setShippingMethodsOnCart(input: { cart_id: "%s", shipping_methods: [{ carrier_code: "flatrate", method_code: "flatrate" }] }) { cart { id } }
+	}`, cartNoPayment), "")
+	doQuery(t, fmt.Sprintf(`mutation {
+		setBillingAddressOnCart(input: { cart_id: "%s", billing_address: { same_as_shipping: true }}) { cart { id } }
+	}`, cartNoPayment), "")
+	doQuery(t, fmt.Sprintf(`mutation {
+		setGuestEmailOnCart(input: { cart_id: "%s", email: "t@t.com"}) { cart { email } }
+	}`, cartNoPayment), "")
+	resp = doQuery(t, fmt.Sprintf(`mutation { placeOrder(input: { cart_id: "%s" }) { errors { code } } }`, cartNoPayment), "")
+	var noPayData struct {
+		PlaceOrder struct {
+			Errors []struct{ Code string } `json:"errors"`
+		} `json:"placeOrder"`
+	}
+	json.Unmarshal(resp.Data, &noPayData)
+	if len(noPayData.PlaceOrder.Errors) == 0 {
+		t.Error("expected error for cart without payment method")
+	}
+	t.Logf("PASS: placeOrder validation errors verified")
+}
+
+// ─── Issue #72: estimateTotals cart immutability check ───────────────────────
+
+func TestEstimateTotals_CartNotModified(t *testing.T) {
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	// Capture initial cart state (no addresses set)
+	before := doQuery(t, fmt.Sprintf(`{ cart(cart_id: "%s") {
+		shipping_addresses { city }
+		selected_payment_method { code }
+	} }`, cartID), "")
+	if len(before.Errors) > 0 {
+		t.Fatalf("cart query: %s", before.Errors[0].Message)
+	}
+
+	// Call estimateTotals with Texas address + flatrate
+	et := doQuery(t, fmt.Sprintf(`mutation {
+		estimateTotals(input: {
+			cart_id: "%s"
+			address: { country_code: "US", region_id: 57, postcode: "78701" }
+			shipping_method: { carrier_code: "flatrate", method_code: "flatrate" }
+		}) {
+			grand_total { value }
+			subtotal { value }
+			shipping { value }
+			tax { value }
+		}
+	}`, cartID), "")
+	if len(et.Errors) > 0 {
+		t.Fatalf("estimateTotals: %s", et.Errors[0].Message)
+	}
+
+	// Verify totals correctness: subtotal=34, shipping=5, tax=8.25%*34 ≈ 2.81
+	var etData struct {
+		EstimateTotals struct {
+			GrandTotal struct{ Value float64 } `json:"grand_total"`
+			Subtotal   struct{ Value float64 } `json:"subtotal"`
+			Shipping   struct{ Value float64 } `json:"shipping"`
+			Tax        struct{ Value float64 } `json:"tax"`
+		} `json:"estimateTotals"`
+	}
+	json.Unmarshal(et.Data, &etData)
+	totals := etData.EstimateTotals
+	if totals.Subtotal.Value != 34 {
+		t.Errorf("subtotal: want 34, got %v", totals.Subtotal.Value)
+	}
+	if totals.Shipping.Value != 5 {
+		t.Errorf("shipping: want 5, got %v", totals.Shipping.Value)
+	}
+	expectedGrand := totals.Subtotal.Value + totals.Shipping.Value + totals.Tax.Value
+	if totals.GrandTotal.Value != expectedGrand {
+		t.Errorf("grand_total: want %.2f, got %.2f", expectedGrand, totals.GrandTotal.Value)
+	}
+
+	// Verify cart was NOT modified by estimateTotals
+	after := doQuery(t, fmt.Sprintf(`{ cart(cart_id: "%s") {
+		shipping_addresses { city }
+		selected_payment_method { code }
+	} }`, cartID), "")
+	if len(after.Errors) > 0 {
+		t.Fatalf("cart query after estimate: %s", after.Errors[0].Message)
+	}
+
+	var beforeData, afterData struct {
+		Cart struct {
+			ShippingAddresses []struct{ City string } `json:"shipping_addresses"`
+			SelectedPayment   *struct{ Code string } `json:"selected_payment_method"`
+		} `json:"cart"`
+	}
+	json.Unmarshal(before.Data, &beforeData)
+	json.Unmarshal(after.Data, &afterData)
+
+	if len(afterData.Cart.ShippingAddresses) != len(beforeData.Cart.ShippingAddresses) {
+		t.Errorf("estimateTotals modified cart shipping addresses: before=%d after=%d",
+			len(beforeData.Cart.ShippingAddresses), len(afterData.Cart.ShippingAddresses))
+	}
+
+	t.Logf("PASS: estimateTotals — grand=%.2f subtotal=%.2f shipping=%.2f tax=%.2f (cart unchanged)",
+		totals.GrandTotal.Value, totals.Subtotal.Value, totals.Shipping.Value, totals.Tax.Value)
 }

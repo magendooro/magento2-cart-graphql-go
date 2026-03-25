@@ -84,7 +84,7 @@ func Place(ctx context.Context, db *sql.DB, in OrderInput) (incrementID, protect
 		in.ShippingAmount, in.ShippingAmount,
 		in.ShippingInclTax, in.ShippingInclTax,
 		in.ShippingTaxAmount, in.ShippingTaxAmount,
-		in.DiscountAmount, in.DiscountAmount,
+		// base_discount_amount through base_shipping_discount_tax_compensation_amnt hardcoded 0 in SQL
 		in.TotalQty, in.TotalItemCount,
 		in.GrandTotal, in.GrandTotal,
 		in.BaseCurrencyCode, in.OrderCurrencyCode,
