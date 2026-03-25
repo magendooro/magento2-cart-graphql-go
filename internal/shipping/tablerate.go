@@ -9,8 +9,8 @@ import (
 )
 
 // TablerateCarrier implements table rate shipping.
-// Looks up rates from shipping_tablerate by (website, country, region, postcode, condition_value)
-// with multi-level fallback.
+// Looks up rates from shipping_tablerate by (website, country, region, postcode,
+// condition_name, condition_value) with multi-level address fallback.
 type TablerateCarrier struct {
 	DB *sql.DB
 	CP *config.ConfigProvider
@@ -23,6 +23,13 @@ func (c *TablerateCarrier) IsActive(storeID int) bool {
 }
 
 func (c *TablerateCarrier) CollectRates(ctx context.Context, req *RateRequest) ([]*Rate, error) {
+	conditionName := c.CP.Get("carriers/tablerate/condition_name", req.StoreID)
+	if conditionName == "" {
+		conditionName = "package_value"
+	}
+
+	conditionValue := conditionValueFor(conditionName, req)
+
 	rid := 0
 	if req.RegionID != nil {
 		rid = *req.RegionID
@@ -32,7 +39,7 @@ func (c *TablerateCarrier) CollectRates(ctx context.Context, req *RateRequest) (
 		pc = *req.Postcode
 	}
 
-	price, err := c.lookupRate(ctx, req.WebsiteID, req.CountryID, rid, pc, req.Subtotal)
+	price, err := c.lookupRate(ctx, req.WebsiteID, req.CountryID, rid, pc, conditionName, conditionValue)
 	if err != nil {
 		return nil, fmt.Errorf("no tablerate found")
 	}
@@ -55,27 +62,41 @@ func (c *TablerateCarrier) CollectRates(ctx context.Context, req *RateRequest) (
 	}}, nil
 }
 
-// lookupRate tries exact match then progressively more general fallbacks.
-func (c *TablerateCarrier) lookupRate(ctx context.Context, websiteID int, countryID string, regionID int, postcode string, subtotal float64) (float64, error) {
+// conditionValueFor maps a condition_name to the corresponding value from the request.
+func conditionValueFor(conditionName string, req *RateRequest) float64 {
+	switch conditionName {
+	case "package_qty":
+		return req.ItemQty
+	case "package_weight":
+		return req.Weight
+	case "package_value_with_discount":
+		return req.SubtotalWithDiscount
+	default: // package_value
+		return req.Subtotal
+	}
+}
+
+// lookupRate tries exact match then progressively more general address fallbacks.
+func (c *TablerateCarrier) lookupRate(ctx context.Context, websiteID int, countryID string, regionID int, postcode string, conditionName string, conditionValue float64) (float64, error) {
 	queries := []struct {
 		sql  string
 		args []interface{}
 	}{
 		{
-			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-			[]interface{}{websiteID, countryID, regionID, postcode, subtotal},
+			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = ? AND condition_name = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+			[]interface{}{websiteID, countryID, regionID, postcode, conditionName, conditionValue},
 		},
 		{
-			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-			[]interface{}{websiteID, countryID, regionID, subtotal},
+			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = ? AND dest_zip = '*' AND condition_name = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+			[]interface{}{websiteID, countryID, regionID, conditionName, conditionValue},
 		},
 		{
-			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-			[]interface{}{websiteID, countryID, subtotal},
+			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = ? AND dest_region_id = 0 AND dest_zip = '*' AND condition_name = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+			[]interface{}{websiteID, countryID, conditionName, conditionValue},
 		},
 		{
-			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = '0' AND dest_region_id = 0 AND dest_zip = '*' AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
-			[]interface{}{websiteID, subtotal},
+			"SELECT price FROM shipping_tablerate WHERE website_id = ? AND dest_country_id = '0' AND dest_region_id = 0 AND dest_zip = '*' AND condition_name = ? AND condition_value <= ? ORDER BY condition_value DESC LIMIT 1",
+			[]interface{}{websiteID, conditionName, conditionValue},
 		},
 	}
 

@@ -1366,14 +1366,19 @@ func toStringPtrs(ss []string) []*string {
 }
 
 func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddressData, cart *repository.CartData) *shipping.RateRequest {
+	subtotalWithDiscount := cart.SubtotalWithDiscount
+	if subtotalWithDiscount <= 0 {
+		subtotalWithDiscount = cart.Subtotal
+	}
 	return &shipping.RateRequest{
-		StoreID:   storeID,
-		WebsiteID: s.cp.GetWebsiteID(storeID),
-		CountryID: addr.CountryID,
-		RegionID:  addr.RegionID,
-		Postcode:  addr.Postcode,
-		Subtotal:  cart.Subtotal,
-		ItemQty:   cart.ItemsQty,
+		StoreID:              storeID,
+		WebsiteID:            s.cp.GetWebsiteID(storeID),
+		CountryID:            addr.CountryID,
+		RegionID:             addr.RegionID,
+		Postcode:             addr.Postcode,
+		Subtotal:             cart.Subtotal,
+		SubtotalWithDiscount: subtotalWithDiscount,
+		ItemQty:              cart.ItemsQty,
 	}
 }
 
