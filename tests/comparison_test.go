@@ -1001,11 +1001,12 @@ func TestCompare_EmptyCartPlaceOrder(t *testing.T) {
 // at every mutation.
 //
 // Adaptations from the tutorial:
-//   - Product: 24-MG04 (Aim Analog Watch, $45) — same as tutorial
+//   - Product: 24-UG06 (Affirm Water Bottle, $7) — tutorial uses a watch;
+//     we use 24-UG06 because that is the only product the H20 coupon applies to
 //   - Address: 3320 N Crescent Dr, Beverly Hills CA 90210 — same as tutorial
 //   - Shipping: tablerate/bestway — same as tutorial
-//   - Coupon: H20 (70% off, applies to all products) — tutorial uses Watch20
-//     which doesn't exist in the sample data; H20 is the available equivalent
+//   - Coupon: H20 (70% off 24-UG06) — tutorial uses Watch20 which doesn't
+//     exist in sample data; H20 is the only active coupon in the sample DB
 //   - Payment: checkmo — same as tutorial
 //
 // The test reveals gaps where our responses diverge from Magento's.
@@ -1038,7 +1039,7 @@ func TestCompare_TutorialCheckout(t *testing.T) {
 		return fmt.Sprintf(`mutation {
 			addSimpleProductsToCart(input: {
 				cart_id: "%s"
-				cart_items: [{ data: { sku: "24-MG04", quantity: 2 } }]
+				cart_items: [{ data: { sku: "24-UG06", quantity: 2 } }]
 			}) {
 				cart {
 					total_quantity
