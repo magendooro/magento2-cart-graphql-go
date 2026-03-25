@@ -163,6 +163,12 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 	for _, item := range items {
 		priceInclTax := item.Price + item.TaxAmount/item.Qty
 		rowTotalInclTax := item.RowTotal + item.TaxAmount
+		productOptions := BuildProductOptionsJSON(ctx, r.db, item, items)
+
+		var productOptionsArg interface{}
+		if productOptions != "" {
+			productOptionsArg = productOptions
+		}
 
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO sales_order_item (
@@ -175,7 +181,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 				tax_percent, tax_amount, base_tax_amount,
 				discount_percent, discount_amount, base_discount_amount,
 				discount_tax_compensation_amount, base_discount_tax_compensation_amount,
-				is_virtual, store_id, created_at, updated_at
+				is_virtual, store_id, product_options, created_at, updated_at
 			) VALUES (
 				?, NULL, ?,
 				?, ?, ?, ?,
@@ -186,7 +192,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 				?, ?, ?,
 				?, ?, ?,
 				0, 0,
-				0, ?, NOW(), NOW()
+				0, ?, ?, NOW(), NOW()
 			)`,
 			orderID, item.ItemID,
 			item.ProductID, item.ProductType, item.SKU, item.Name,
@@ -196,7 +202,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 			rowTotalInclTax, rowTotalInclTax,
 			item.TaxPercent, item.TaxAmount, item.TaxAmount,
 			item.DiscountPercent(), item.DiscountAmount, item.DiscountAmount,
-			cart.StoreID,
+			cart.StoreID, productOptionsArg,
 		)
 		if err != nil {
 			return "", fmt.Errorf("insert order item %s: %w", item.SKU, err)
