@@ -22,6 +22,7 @@ type CartItemData struct {
 	TaxPercent    float64
 	TaxAmount     float64
 	DiscountAmount     float64
+	Weight             float64 // per-unit product weight
 	ParentItemID       *int
 	ProductTaxClassID  int // resolved from catalog_product_entity_int
 }
@@ -49,7 +50,7 @@ func (r *CartItemRepository) GetByQuoteID(ctx context.Context, quoteID int) ([]*
 		       qty, COALESCE(price, 0), COALESCE(base_price, 0),
 		       COALESCE(row_total, 0), COALESCE(base_row_total, 0),
 		       COALESCE(tax_percent, 0), COALESCE(tax_amount, 0),
-		       COALESCE(discount_amount, 0), parent_item_id
+		       COALESCE(discount_amount, 0), COALESCE(weight, 0), parent_item_id
 		FROM quote_item
 		WHERE quote_id = ?
 		ORDER BY item_id`, quoteID)
@@ -65,13 +66,28 @@ func (r *CartItemRepository) GetByQuoteID(ctx context.Context, quoteID int) ([]*
 			&item.ItemID, &item.QuoteID, &item.ProductID, &item.ProductType,
 			&item.SKU, &item.Name, &item.Qty, &item.Price, &item.BasePrice,
 			&item.RowTotal, &item.BaseRowTotal, &item.TaxPercent, &item.TaxAmount,
-			&item.DiscountAmount, &item.ParentItemID,
+			&item.DiscountAmount, &item.Weight, &item.ParentItemID,
 		); err != nil {
 			return nil, fmt.Errorf("scan cart item: %w", err)
 		}
 		items = append(items, &item)
 	}
 	return items, rows.Err()
+}
+
+// lookupProductWeight returns the catalog weight for a product (0 if not set).
+func (r *CartItemRepository) lookupProductWeight(ctx context.Context, productID int) float64 {
+	var weight float64
+	r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(value, 0)
+		FROM catalog_product_entity_decimal
+		WHERE entity_id = ?
+		  AND attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'weight' AND entity_type_id = 4 LIMIT 1)
+		  AND store_id = 0
+		LIMIT 1`,
+		productID,
+	).Scan(&weight)
+	return weight
 }
 
 // Add inserts a new item or increments quantity if same product already in cart.
@@ -99,16 +115,21 @@ func (r *CartItemRepository) Add(ctx context.Context, quoteID, productID int, sk
 	}
 
 	// New item
+	weight := r.lookupProductWeight(ctx, productID)
 	rowTotal := price * qty
+	rowWeight := weight * qty
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO quote_item (quote_id, product_id, product_type, sku, name,
 			qty, price, base_price, row_total, base_row_total,
+			weight, row_weight,
 			store_id, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			?, ?,
 			(SELECT store_id FROM quote WHERE entity_id = ?),
 			NOW(), NOW())`,
 		quoteID, productID, productType, sku, name,
 		qty, price, price, rowTotal, rowTotal,
+		weight, rowWeight,
 		quoteID,
 	)
 	if err != nil {
@@ -146,18 +167,23 @@ func (r *CartItemRepository) GetItemQuoteID(ctx context.Context, itemID int) (in
 	return quoteID, err
 }
 
-// AddConfigurable inserts a parent configurable item (carries the price).
+// AddConfigurable inserts a parent configurable/bundle item (carries the price and weight).
 func (r *CartItemRepository) AddConfigurable(ctx context.Context, quoteID, productID int, sku, name, productType string, qty, price float64) (int, error) {
+	weight := r.lookupProductWeight(ctx, productID)
 	rowTotal := price * qty
+	rowWeight := weight * qty
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO quote_item (quote_id, product_id, product_type, sku, name,
 			qty, price, base_price, row_total, base_row_total,
+			weight, row_weight,
 			store_id, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			?, ?,
 			(SELECT store_id FROM quote WHERE entity_id = ?),
 			NOW(), NOW())`,
 		quoteID, productID, productType, sku, name,
 		qty, price, price, rowTotal, rowTotal,
+		weight, rowWeight,
 		quoteID,
 	)
 	if err != nil {

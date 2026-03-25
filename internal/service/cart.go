@@ -326,6 +326,7 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 
 	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
 	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
+	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
 	storeID := middleware.GetStoreID(ctx)
 
 	for _, method := range methods {
@@ -333,7 +334,7 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 			if a.AddressType != "shipping" {
 				continue
 			}
-			req := s.buildRateRequest(storeID, a, cart)
+			req := s.buildRateRequest(storeID, a, cart, items)
 			rates := s.shippingRegistry.CollectRates(ctx, req)
 			var selectedRate *shipping.Rate
 			for _, r := range rates {
@@ -402,16 +403,15 @@ func (s *CartService) EstimateShippingMethods(ctx context.Context, input model.E
 		return nil, carterr.ErrCartNotFound(input.CartID)
 	}
 
+	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
 	storeID := middleware.GetStoreID(ctx)
-	req := &shipping.RateRequest{
-		StoreID:   storeID,
-		WebsiteID: s.cp.GetWebsiteID(storeID),
-		CountryID: input.Address.CountryCode,
-		RegionID:  input.Address.RegionID,
-		Postcode:  input.Address.Postcode,
-		Subtotal:  cart.Subtotal,
-		ItemQty:   cart.ItemsQty,
+	tempAddr := &repository.CartAddressData{
+		AddressType: "shipping",
+		CountryID:   input.Address.CountryCode,
+		RegionID:    input.Address.RegionID,
+		Postcode:    input.Address.Postcode,
 	}
+	req := s.buildRateRequest(storeID, tempAddr, cart, items)
 	rates := s.shippingRegistry.CollectRates(ctx, req)
 
 	currency := model.CurrencyEnum(cart.QuoteCurrencyCode)
@@ -450,15 +450,7 @@ func (s *CartService) EstimateTotals(ctx context.Context, input model.EstimateTo
 
 	if input.ShippingMethod != nil {
 		storeID := middleware.GetStoreID(ctx)
-		req := &shipping.RateRequest{
-			StoreID:   storeID,
-			WebsiteID: s.cp.GetWebsiteID(storeID),
-			CountryID: input.Address.CountryCode,
-			RegionID:  input.Address.RegionID,
-			Postcode:  input.Address.Postcode,
-			Subtotal:  cart.Subtotal,
-			ItemQty:   cart.ItemsQty,
-		}
+		req := s.buildRateRequest(storeID, tempAddr, cart, items)
 		for _, r := range s.shippingRegistry.CollectRates(ctx, req) {
 			if r.CarrierCode == input.ShippingMethod.CarrierCode && r.MethodCode == input.ShippingMethod.MethodCode {
 				tempAddr.ShippingAmount = r.Price
@@ -729,7 +721,7 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 	shippingRates := make(map[int][]*shipping.Rate)
 	for _, a := range addrs {
 		if a.AddressType == "shipping" {
-			req := s.buildRateRequest(storeID, a, cart)
+			req := s.buildRateRequest(storeID, a, cart, items)
 			shippingRates[a.AddressID] = s.shippingRegistry.CollectRates(ctx, req)
 		}
 	}
@@ -800,10 +792,16 @@ func (s *CartService) collectTotals(ctx context.Context, cart *repository.CartDa
 	return s.pipeline.Collect(ctx, cc)
 }
 
-func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddressData, cart *repository.CartData) *shipping.RateRequest {
+func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddressData, cart *repository.CartData, items []*repository.CartItemData) *shipping.RateRequest {
 	subtotalWithDiscount := cart.SubtotalWithDiscount
 	if subtotalWithDiscount <= 0 {
 		subtotalWithDiscount = cart.Subtotal
+	}
+	var totalWeight float64
+	for _, item := range items {
+		if item.ParentItemID == nil {
+			totalWeight += item.Weight * item.Qty
+		}
 	}
 	return &shipping.RateRequest{
 		StoreID:              storeID,
@@ -814,6 +812,7 @@ func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddress
 		Subtotal:             cart.Subtotal,
 		SubtotalWithDiscount: subtotalWithDiscount,
 		ItemQty:              cart.ItemsQty,
+		Weight:               totalWeight,
 	}
 }
 
