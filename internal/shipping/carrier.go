@@ -11,13 +11,15 @@ import (
 
 // RateRequest holds the data carriers need to compute rates.
 type RateRequest struct {
-	StoreID   int
-	WebsiteID int
-	CountryID string
-	RegionID  *int
-	Postcode  *string
-	Subtotal  float64
-	ItemQty   float64
+	StoreID              int
+	WebsiteID            int
+	CountryID            string
+	RegionID             *int
+	Postcode             *string
+	Subtotal             float64
+	SubtotalWithDiscount float64 // for condition_name = package_value_with_discount
+	ItemQty              float64 // for condition_name = package_qty
+	Weight               float64 // for condition_name = package_weight
 }
 
 // Rate holds a single available shipping rate.
