@@ -43,8 +43,19 @@ GOTOOLCHAIN=auto go test ./tests/ -v -timeout 300s -count=1
 GOTOOLCHAIN=auto go test ./tests/ -run "^Test[^C]" -v -timeout 60s -count=1
 
 # Run server (port 8084)
-MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=magento248 GOTOOLCHAIN=auto go run ./cmd/server/
+MAGENTO_CRYPT_KEY="<key>" DB_USER=fch DB_NAME=magento248 GOTOOLCHAIN=auto go run ./cmd/server/
 ```
+
+### Shared packages (from magento2-go-common)
+
+`internal/{cache,config/provider,database,jwt,middleware}` were removed — provided by `magento2-go-common`. Cart uses aliased imports in `graph/resolver.go` and `internal/app/app.go`:
+
+```go
+"github.com/magendooro/magento2-go-common/config"      // ConfigProvider (passed as *config.ConfigProvider)
+"github.com/magendooro/magento2-go-common/middleware"  // TokenResolver, AuthMiddleware, etc.
+```
+
+The service-local `internal/config/config.go` (Viper struct) is kept — it's the service's own config shape, not the shared ConfigProvider.
 
 ## Architecture
 
@@ -118,9 +129,10 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 - Flatrate shipping is per-item by default (`type=I`, price × qty)
 - PlaceOrder error messages must NOT be prefixed with "Unable to place order:"
 
-### From catalog + customer projects
-- Use ConfigProvider for all core_config_data reads
+### From this workspace (cross-cutting)
+- Use ConfigProvider for all core_config_data reads — never query the table directly
 - Never hardcode attribute IDs — use subqueries against eav_attribute
 - Always `redis-cli FLUSHALL` when testing after code changes
 - Error messages must match Magento exactly (capitalized, with period)
 - One PR per ticket, branch per feature
+- See parent workspace CLAUDE.md for go.work rules and common module guidelines
