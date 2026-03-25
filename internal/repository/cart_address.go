@@ -122,6 +122,16 @@ func (r *CartAddressRepository) SetAddress(ctx context.Context, quoteID int, add
 	return int(id), nil
 }
 
+// SetSameAsBilling sets same_as_billing on the shipping address row for a cart.
+// Magento calls this when setBillingAddressOnCart is used with same_as_shipping=true.
+func (r *CartAddressRepository) SetSameAsBilling(ctx context.Context, quoteID int, value int) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE quote_address SET same_as_billing = ? WHERE quote_id = ? AND address_type = 'shipping'",
+		value, quoteID,
+	)
+	return err
+}
+
 // ResolveRegion looks up region name and code from directory_country_region.
 func (r *CartAddressRepository) ResolveRegion(ctx context.Context, regionID int) (string, string, error) {
 	var code, name string

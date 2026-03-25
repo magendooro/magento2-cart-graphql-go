@@ -59,5 +59,13 @@ var (
 	ErrMultipleShippingMethods   = fmt.Errorf("You cannot specify multiple shipping methods.")
 )
 
+// Billing address input errors (Magento SetBillingAddressOnCart)
+var (
+	ErrBillingAddressInputMissing    = fmt.Errorf(`The billing address must contain either "customer_address_id", "address", or "same_as_shipping".`)
+	ErrBillingAddressInputConflict   = fmt.Errorf(`The billing address cannot contain "customer_address_id" and "address" at the same time.`)
+	ErrSameAsShippingNotSet          = fmt.Errorf(`Could not use the "same_as_shipping" option, because the shipping address has not been set.`)
+	ErrSameAsShippingMultipleAddrs   = fmt.Errorf(`Could not use the "same_as_shipping" option, because multiple shipping addresses have been set.`)
+)
+
 // Order errors
 var ErrPlaceOrderFailed = fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
