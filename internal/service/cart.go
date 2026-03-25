@@ -544,6 +544,14 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 	}
 
 	ruleIDStr := fmt.Sprintf("%d", rule.RuleID)
+	var totalDiscount float64
+	type itemUpdate struct {
+		itemID          int
+		discountAmount  float64
+		discountPercent float64
+	}
+	var updates []itemUpdate
+
 	for _, item := range items {
 		if item.ParentItemID != nil {
 			continue
@@ -575,7 +583,18 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 		if discountAmount > item.RowTotal {
 			discountAmount = item.RowTotal
 		}
-		s.couponRepo.UpdateItemDiscount(ctx, item.ItemID, discountAmount, discountPercent, ruleIDStr)
+		totalDiscount += discountAmount
+		updates = append(updates, itemUpdate{item.ItemID, discountAmount, discountPercent})
+	}
+
+	// Magento rejects the coupon when it would produce no discount for this cart
+	// (e.g. action conditions target a SKU that is not in the cart).
+	if totalDiscount == 0 {
+		return nil, fmt.Errorf("The coupon code isn't valid. Verify the code and try again.")
+	}
+
+	for _, u := range updates {
+		s.couponRepo.UpdateItemDiscount(ctx, u.itemID, u.discountAmount, u.discountPercent, ruleIDStr)
 	}
 
 	s.couponRepo.SetCouponOnQuote(ctx, quoteID, couponCode, ruleIDStr)
