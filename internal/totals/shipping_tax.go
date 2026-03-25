@@ -40,8 +40,10 @@ func (c *ShippingTaxCollector) Collect(ctx context.Context, cc *CollectorContext
 		postcode = *cc.Address.Postcode
 	}
 
-	// Default customer tax class = 3 (Retail Customer)
-	customerTaxClassID := 3
+	customerTaxClassID := cc.CustomerTaxClassID
+	if customerTaxClassID == 0 {
+		customerTaxClassID = 3 // Retail Customer fallback
+	}
 
 	// Create a virtual item representing the shipping amount with the shipping tax class
 	shippingItem := &repository.CartItemData{

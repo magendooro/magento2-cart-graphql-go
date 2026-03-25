@@ -44,10 +44,11 @@ type AppliedTax struct {
 
 // CollectorContext provides the data collectors need.
 type CollectorContext struct {
-	Quote   *repository.CartData
-	Items   []*repository.CartItemData
-	Address *repository.CartAddressData // shipping address (nil for virtual carts)
-	StoreID int
+	Quote              *repository.CartData
+	Items              []*repository.CartItemData
+	Address            *repository.CartAddressData // shipping address (nil for virtual carts)
+	StoreID            int
+	CustomerTaxClassID int // resolved from customer_group; 3 (Retail Customer) when unset
 }
 
 // Collector computes one aspect of cart totals.

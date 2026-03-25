@@ -71,9 +71,10 @@ func (c *TaxCollector) Collect(ctx context.Context, cc *CollectorContext, total 
 		postcode = *cc.Address.Postcode
 	}
 
-	// Default customer tax class = 3 (Retail Customer)
-	// TODO: resolve from customer_group when customer carts are supported
-	customerTaxClassID := 3
+	customerTaxClassID := cc.CustomerTaxClassID
+	if customerTaxClassID == 0 {
+		customerTaxClassID = 3 // Retail Customer fallback
+	}
 
 	taxResults, err := c.TaxRepo.CalculateTax(ctx, cc.Address.CountryID, regionID, postcode, cc.Items, customerTaxClassID, priceIncludesTax)
 	if err != nil {

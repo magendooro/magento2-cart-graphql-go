@@ -85,7 +85,7 @@ func (r *OrderRepository) PlaceOrder(ctx context.Context, cart *CartData, items 
 
 	subtotalInclTax := cart.Subtotal + taxAmount
 	shippingInclTax := shippingAmount // no tax on shipping yet
-	customerGroupID := 0             // guest default
+	customerGroupID := cart.CustomerGroupID
 
 	// Compute discount from cart totals
 	discountAmount := 0.0

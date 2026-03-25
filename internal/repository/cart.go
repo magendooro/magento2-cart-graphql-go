@@ -24,6 +24,7 @@ type CartData struct {
 	CustomerID         *int
 	CustomerEmail      *string
 	CustomerIsGuest    int
+	CustomerGroupID    int
 	BaseCurrencyCode   string
 	QuoteCurrencyCode  string
 	ReservedOrderID    *string
@@ -40,17 +41,19 @@ func NewCartRepository(db *sql.DB) *CartRepository {
 // Create inserts a new empty quote and returns its entity_id.
 func (r *CartRepository) Create(ctx context.Context, storeID int, customerID *int) (int, error) {
 	isGuest := 1
+	customerGroupID := 0
 	if customerID != nil {
 		isGuest = 0
+		customerGroupID = r.lookupCustomerGroupID(ctx, *customerID)
 	}
 
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO quote (store_id, is_active, items_count, items_qty, grand_total, base_grand_total,
-			subtotal, base_subtotal, customer_id, customer_is_guest,
+			subtotal, base_subtotal, customer_id, customer_is_guest, customer_group_id,
 			base_currency_code, store_currency_code, quote_currency_code,
 			created_at, updated_at)
-		VALUES (?, 1, 0, 0, 0, 0, 0, 0, ?, ?, 'USD', 'USD', 'USD', NOW(), NOW())`,
-		storeID, customerID, isGuest,
+		VALUES (?, 1, 0, 0, 0, 0, 0, 0, ?, ?, ?, 'USD', 'USD', 'USD', NOW(), NOW())`,
+		storeID, customerID, isGuest, customerGroupID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("create cart: %w", err)
@@ -71,6 +74,7 @@ func (r *CartRepository) GetByID(ctx context.Context, entityID int) (*CartData, 
 		       COALESCE(grand_total, 0), COALESCE(base_grand_total, 0),
 		       COALESCE(subtotal, 0), COALESCE(subtotal_with_discount, 0),
 		       coupon_code, customer_id, customer_email, COALESCE(customer_is_guest, 1),
+		       COALESCE(customer_group_id, 0),
 		       COALESCE(base_currency_code, 'USD'), COALESCE(quote_currency_code, 'USD'),
 		       reserved_order_id
 		FROM quote WHERE entity_id = ?`, entityID,
@@ -80,6 +84,7 @@ func (r *CartRepository) GetByID(ctx context.Context, entityID int) (*CartData, 
 		&c.GrandTotal, &c.BaseGrandTotal,
 		&c.Subtotal, &c.SubtotalWithDiscount,
 		&c.CouponCode, &c.CustomerID, &c.CustomerEmail, &c.CustomerIsGuest,
+		&c.CustomerGroupID,
 		&c.BaseCurrencyCode, &c.QuoteCurrencyCode,
 		&c.ReservedOrderID,
 	)
@@ -163,4 +168,15 @@ func (r *CartRepository) DeactivateSimple(ctx context.Context, entityID int) err
 // DB returns the underlying database connection (for product lookups).
 func (r *CartRepository) DB() *sql.DB {
 	return r.db
+}
+
+// lookupCustomerGroupID returns the customer_group_id from customer_entity.
+// Returns 0 (NOT LOGGED IN) if the customer is not found.
+func (r *CartRepository) lookupCustomerGroupID(ctx context.Context, customerID int) int {
+	var groupID int
+	r.db.QueryRowContext(ctx,
+		"SELECT COALESCE(group_id, 0) FROM customer_entity WHERE entity_id = ?",
+		customerID,
+	).Scan(&groupID)
+	return groupID
 }

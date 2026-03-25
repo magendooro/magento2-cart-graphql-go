@@ -228,3 +228,17 @@ func (r *TaxRepository) GetProductTaxClassIDs(ctx context.Context, productIDs []
 
 	return result, rows.Err()
 }
+
+// GetCustomerTaxClassID returns the tax_class_id for the given customer_group_id.
+// Returns 3 (Retail Customer) as the fallback for any error or missing row.
+func (r *TaxRepository) GetCustomerTaxClassID(ctx context.Context, customerGroupID int) int {
+	var classID int
+	err := r.db.QueryRowContext(ctx,
+		"SELECT COALESCE(tax_class_id, 3) FROM customer_group WHERE customer_group_id = ?",
+		customerGroupID,
+	).Scan(&classID)
+	if err != nil {
+		return 3 // Retail Customer fallback
+	}
+	return classID
+}
