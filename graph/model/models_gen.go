@@ -147,6 +147,7 @@ type BundleProductCartItemInput struct {
 type Cart struct {
 	ID                      string                    `json:"id"`
 	Items                   []CartItemInterface       `json:"items,omitempty"`
+	ItemsV2                 *CartItems                `json:"itemsV2,omitempty"`
 	TotalQuantity           float64                   `json:"total_quantity"`
 	IsVirtual               bool                      `json:"is_virtual"`
 	Email                   *string                   `json:"email,omitempty"`
@@ -218,6 +219,12 @@ type CartItemProductImage struct {
 type CartItemUpdateInput struct {
 	CartItemUID string  `json:"cart_item_uid"`
 	Quantity    float64 `json:"quantity"`
+}
+
+type CartItems struct {
+	Items      []CartItemInterface   `json:"items"`
+	PageInfo   *SearchResultPageInfo `json:"page_info"`
+	TotalCount int                   `json:"total_count"`
 }
 
 type CartPrices struct {
@@ -382,6 +389,12 @@ type RemoveItemFromCartOutput struct {
 type ReorderItemsOutput struct {
 	Cart            *Cart                     `json:"cart"`
 	UserInputErrors []*CheckoutUserInputError `json:"userInputErrors"`
+}
+
+type SearchResultPageInfo struct {
+	CurrentPage *int `json:"current_page,omitempty"`
+	PageSize    *int `json:"page_size,omitempty"`
+	TotalPages  *int `json:"total_pages,omitempty"`
 }
 
 type SelectedBundleOption struct {

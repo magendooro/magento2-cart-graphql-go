@@ -1841,3 +1841,66 @@ func TestEstimateTotals_CartNotModified(t *testing.T) {
 	t.Logf("PASS: estimateTotals — grand=%.2f subtotal=%.2f shipping=%.2f tax=%.2f (cart unchanged)",
 		totals.GrandTotal.Value, totals.Subtotal.Value, totals.Shipping.Value, totals.Tax.Value)
 }
+
+func TestItemsV2(t *testing.T) {
+	const sku = "24-MB01"
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, sku, 3)
+
+	query := fmt.Sprintf(`{
+		cart(cart_id:"%s") {
+			itemsV2(pageSize:10, currentPage:1) {
+				total_count
+				page_info { current_page page_size total_pages }
+				items { uid quantity product { sku } }
+			}
+		}
+	}`, cartID)
+
+	var out struct {
+		Cart struct {
+			ItemsV2 struct {
+				TotalCount int `json:"total_count"`
+				PageInfo   struct {
+					CurrentPage int `json:"current_page"`
+					PageSize    int `json:"page_size"`
+					TotalPages  int `json:"total_pages"`
+				} `json:"page_info"`
+				Items []struct {
+					Quantity float64 `json:"quantity"`
+					Product  struct {
+						SKU string `json:"sku"`
+					} `json:"product"`
+				} `json:"items"`
+			} `json:"itemsV2"`
+		} `json:"cart"`
+	}
+	resp := doQuery(t, query, "")
+	if err := json.Unmarshal(resp.Data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	iv := out.Cart.ItemsV2
+	if iv.TotalCount != 1 {
+		t.Fatalf("expected total_count=1 got %d", iv.TotalCount)
+	}
+	if iv.PageInfo.CurrentPage != 1 {
+		t.Errorf("expected current_page=1 got %d", iv.PageInfo.CurrentPage)
+	}
+	if iv.PageInfo.PageSize != 10 {
+		t.Errorf("expected page_size=10 got %d", iv.PageInfo.PageSize)
+	}
+	if iv.PageInfo.TotalPages != 1 {
+		t.Errorf("expected total_pages=1 got %d", iv.PageInfo.TotalPages)
+	}
+	if len(iv.Items) != 1 {
+		t.Fatalf("expected 1 item in page got %d", len(iv.Items))
+	}
+	if iv.Items[0].Product.SKU != sku {
+		t.Errorf("expected sku=%s got %s", sku, iv.Items[0].Product.SKU)
+	}
+	if iv.Items[0].Quantity != 3 {
+		t.Errorf("expected qty=3 got %.0f", iv.Items[0].Quantity)
+	}
+	t.Logf("PASS: itemsV2 — total_count=%d pages=%d items=%d", iv.TotalCount, iv.PageInfo.TotalPages, len(iv.Items))
+}

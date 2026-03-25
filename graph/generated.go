@@ -28,6 +28,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Cart() CartResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
 }
@@ -111,6 +112,7 @@ type ComplexityRoot struct {
 		ID                      func(childComplexity int) int
 		IsVirtual               func(childComplexity int) int
 		Items                   func(childComplexity int) int
+		ItemsV2                 func(childComplexity int, pageSize *int, currentPage *int) int
 		Prices                  func(childComplexity int) int
 		SelectedPaymentMethod   func(childComplexity int) int
 		ShippingAddresses       func(childComplexity int) int
@@ -151,6 +153,12 @@ type ComplexityRoot struct {
 	CartItemProductImage struct {
 		Label func(childComplexity int) int
 		URL   func(childComplexity int) int
+	}
+
+	CartItems struct {
+		Items      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
 	}
 
 	CartPrices struct {
@@ -269,6 +277,12 @@ type ComplexityRoot struct {
 		UserInputErrors func(childComplexity int) int
 	}
 
+	SearchResultPageInfo struct {
+		CurrentPage func(childComplexity int) int
+		PageSize    func(childComplexity int) int
+		TotalPages  func(childComplexity int) int
+	}
+
 	SelectedBundleOption struct {
 		Label  func(childComplexity int) int
 		Type   func(childComplexity int) int
@@ -352,6 +366,9 @@ type ComplexityRoot struct {
 	}
 }
 
+type CartResolver interface {
+	ItemsV2(ctx context.Context, obj *model.Cart, pageSize *int, currentPage *int) (*model.CartItems, error)
+}
 type MutationResolver interface {
 	CreateEmptyCart(ctx context.Context, input *model.CreateEmptyCartInput) (*string, error)
 	CreateGuestCart(ctx context.Context, input *model.CreateGuestCartInput) (*model.CreateGuestCartOutput, error)
@@ -652,6 +669,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Cart.Items(childComplexity), true
+	case "Cart.itemsV2":
+		if e.ComplexityRoot.Cart.ItemsV2 == nil {
+			break
+		}
+
+		args, err := ec.field_Cart_itemsV2_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Cart.ItemsV2(childComplexity, args["pageSize"].(*int), args["currentPage"].(*int)), true
 	case "Cart.prices":
 		if e.ComplexityRoot.Cart.Prices == nil {
 			break
@@ -790,6 +818,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CartItemProductImage.URL(childComplexity), true
+
+	case "CartItems.items":
+		if e.ComplexityRoot.CartItems.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItems.Items(childComplexity), true
+	case "CartItems.page_info":
+		if e.ComplexityRoot.CartItems.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItems.PageInfo(childComplexity), true
+	case "CartItems.total_count":
+		if e.ComplexityRoot.CartItems.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItems.TotalCount(childComplexity), true
 
 	case "CartPrices.applied_taxes":
 		if e.ComplexityRoot.CartPrices.AppliedTaxes == nil {
@@ -1313,6 +1360,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ReorderItemsOutput.UserInputErrors(childComplexity), true
 
+	case "SearchResultPageInfo.current_page":
+		if e.ComplexityRoot.SearchResultPageInfo.CurrentPage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SearchResultPageInfo.CurrentPage(childComplexity), true
+	case "SearchResultPageInfo.page_size":
+		if e.ComplexityRoot.SearchResultPageInfo.PageSize == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SearchResultPageInfo.PageSize(childComplexity), true
+	case "SearchResultPageInfo.total_pages":
+		if e.ComplexityRoot.SearchResultPageInfo.TotalPages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SearchResultPageInfo.TotalPages(childComplexity), true
+
 	case "SelectedBundleOption.label":
 		if e.ComplexityRoot.SelectedBundleOption.Label == nil {
 			break
@@ -1719,6 +1785,22 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Cart_itemsV2_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["pageSize"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "currentPage", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["currentPage"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addBundleProductsToCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2073,6 +2155,8 @@ func (ec *executionContext) fieldContext_AddBundleProductsToCartOutput_cart(_ co
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -2126,6 +2210,8 @@ func (ec *executionContext) fieldContext_AddConfigurableProductsToCartOutput_car
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -2179,6 +2265,8 @@ func (ec *executionContext) fieldContext_AddProductsToCartOutput_cart(_ context.
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -2267,6 +2355,8 @@ func (ec *executionContext) fieldContext_AddSimpleProductsToCartOutput_cart(_ co
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -2320,6 +2410,8 @@ func (ec *executionContext) fieldContext_AddVirtualProductsToCartOutput_cart(_ c
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -2402,6 +2494,8 @@ func (ec *executionContext) fieldContext_ApplyCouponToCartOutput_cart(_ context.
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -3309,6 +3403,55 @@ func (ec *executionContext) fieldContext_Cart_items(_ context.Context, field gra
 	return fc, nil
 }
 
+func (ec *executionContext) _Cart_itemsV2(ctx context.Context, field graphql.CollectedField, obj *model.Cart) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Cart_itemsV2,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Cart().ItemsV2(ctx, obj, fc.Args["pageSize"].(*int), fc.Args["currentPage"].(*int))
+		},
+		nil,
+		ec.marshalOCartItems2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItems,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Cart_itemsV2(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Cart",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "items":
+				return ec.fieldContext_CartItems_items(ctx, field)
+			case "page_info":
+				return ec.fieldContext_CartItems_page_info(ctx, field)
+			case "total_count":
+				return ec.fieldContext_CartItems_total_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItems", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Cart_itemsV2_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Cart_total_quantity(ctx context.Context, field graphql.CollectedField, obj *model.Cart) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4204,6 +4347,101 @@ func (ec *executionContext) fieldContext_CartItemProductImage_label(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _CartItems_items(ctx context.Context, field graphql.CollectedField, obj *model.CartItems) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItems_items,
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		ec.marshalNCartItemInterface2ᚕgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInterfaceᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItems_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItems",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItems_page_info(ctx context.Context, field graphql.CollectedField, obj *model.CartItems) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItems_page_info,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNSearchResultPageInfo2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSearchResultPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItems_page_info(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItems",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "current_page":
+				return ec.fieldContext_SearchResultPageInfo_current_page(ctx, field)
+			case "page_size":
+				return ec.fieldContext_SearchResultPageInfo_page_size(ctx, field)
+			case "total_pages":
+				return ec.fieldContext_SearchResultPageInfo_total_pages(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SearchResultPageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItems_total_count(ctx context.Context, field graphql.CollectedField, obj *model.CartItems) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItems_total_count,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItems_total_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItems",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CartPrices_grand_total(ctx context.Context, field graphql.CollectedField, obj *model.CartPrices) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4904,6 +5142,8 @@ func (ec *executionContext) fieldContext_CreateGuestCartOutput_cart(_ context.Co
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6049,6 +6289,8 @@ func (ec *executionContext) fieldContext_Mutation_mergeCarts(ctx context.Context
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6114,6 +6356,8 @@ func (ec *executionContext) fieldContext_Mutation_assignCustomerToGuestCart(ctx 
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6526,6 +6770,8 @@ func (ec *executionContext) fieldContext_Query_cart(ctx context.Context, field g
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6590,6 +6836,8 @@ func (ec *executionContext) fieldContext_Query_customerCart(_ context.Context, f
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6751,6 +6999,8 @@ func (ec *executionContext) fieldContext_RemoveCouponFromCartOutput_cart(_ conte
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6804,6 +7054,8 @@ func (ec *executionContext) fieldContext_RemoveItemFromCartOutput_cart(_ context
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6857,6 +7109,8 @@ func (ec *executionContext) fieldContext_ReorderItemsOutput_cart(_ context.Conte
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -6914,6 +7168,93 @@ func (ec *executionContext) fieldContext_ReorderItemsOutput_userInputErrors(_ co
 				return ec.fieldContext_CheckoutUserInputError_path(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CheckoutUserInputError", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SearchResultPageInfo_current_page(ctx context.Context, field graphql.CollectedField, obj *model.SearchResultPageInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SearchResultPageInfo_current_page,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPage, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SearchResultPageInfo_current_page(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SearchResultPageInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SearchResultPageInfo_page_size(ctx context.Context, field graphql.CollectedField, obj *model.SearchResultPageInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SearchResultPageInfo_page_size,
+		func(ctx context.Context) (any, error) {
+			return obj.PageSize, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SearchResultPageInfo_page_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SearchResultPageInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SearchResultPageInfo_total_pages(ctx context.Context, field graphql.CollectedField, obj *model.SearchResultPageInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SearchResultPageInfo_total_pages,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalPages, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SearchResultPageInfo_total_pages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SearchResultPageInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -7584,6 +7925,8 @@ func (ec *executionContext) fieldContext_SetBillingAddressOnCartOutput_cart(_ co
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -7637,6 +7980,8 @@ func (ec *executionContext) fieldContext_SetGuestEmailOnCartOutput_cart(_ contex
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -7690,6 +8035,8 @@ func (ec *executionContext) fieldContext_SetPaymentMethodOnCartOutput_cart(_ con
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -7743,6 +8090,8 @@ func (ec *executionContext) fieldContext_SetShippingAddressesOnCartOutput_cart(_
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -7796,6 +8145,8 @@ func (ec *executionContext) fieldContext_SetShippingMethodsOnCartOutput_cart(_ c
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -8391,6 +8742,8 @@ func (ec *executionContext) fieldContext_UpdateCartItemsOutput_cart(_ context.Co
 				return ec.fieldContext_Cart_id(ctx, field)
 			case "items":
 				return ec.fieldContext_Cart_items(ctx, field)
+			case "itemsV2":
+				return ec.fieldContext_Cart_itemsV2(ctx, field)
 			case "total_quantity":
 				return ec.fieldContext_Cart_total_quantity(ctx, field)
 			case "is_virtual":
@@ -11760,19 +12113,52 @@ func (ec *executionContext) _Cart(ctx context.Context, sel ast.SelectionSet, obj
 		case "id":
 			out.Values[i] = ec._Cart_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "items":
 			out.Values[i] = ec._Cart_items(ctx, field, obj)
+		case "itemsV2":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Cart_itemsV2(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "total_quantity":
 			out.Values[i] = ec._Cart_total_quantity(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "is_virtual":
 			out.Values[i] = ec._Cart_is_virtual(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "email":
 			out.Values[i] = ec._Cart_email(ctx, field, obj)
@@ -11781,7 +12167,7 @@ func (ec *executionContext) _Cart(ctx context.Context, sel ast.SelectionSet, obj
 		case "shipping_addresses":
 			out.Values[i] = ec._Cart_shipping_addresses(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "billing_address":
 			out.Values[i] = ec._Cart_billing_address(ctx, field, obj)
@@ -12055,6 +12441,55 @@ func (ec *executionContext) _CartItemProductImage(ctx context.Context, sel ast.S
 			out.Values[i] = ec._CartItemProductImage_url(ctx, field, obj)
 		case "label":
 			out.Values[i] = ec._CartItemProductImage_label(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var cartItemsImplementors = []string{"CartItems"}
+
+func (ec *executionContext) _CartItems(ctx context.Context, sel ast.SelectionSet, obj *model.CartItems) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cartItemsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CartItems")
+		case "items":
+			out.Values[i] = ec._CartItems_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "page_info":
+			out.Values[i] = ec._CartItems_page_info(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total_count":
+			out.Values[i] = ec._CartItems_total_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12943,6 +13378,46 @@ func (ec *executionContext) _ReorderItemsOutput(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var searchResultPageInfoImplementors = []string{"SearchResultPageInfo"}
+
+func (ec *executionContext) _SearchResultPageInfo(ctx context.Context, sel ast.SelectionSet, obj *model.SearchResultPageInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, searchResultPageInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SearchResultPageInfo")
+		case "current_page":
+			out.Values[i] = ec._SearchResultPageInfo_current_page(ctx, field, obj)
+		case "page_size":
+			out.Values[i] = ec._SearchResultPageInfo_page_size(ctx, field, obj)
+		case "total_pages":
+			out.Values[i] = ec._SearchResultPageInfo_total_pages(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -14046,6 +14521,32 @@ func (ec *executionContext) unmarshalNCartItemInput2ᚖgithubᚗcomᚋmagendooro
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNCartItemInterface2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInterface(ctx context.Context, sel ast.SelectionSet, v model.CartItemInterface) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CartItemInterface(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCartItemInterface2ᚕgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInterfaceᚄ(ctx context.Context, sel ast.SelectionSet, v []model.CartItemInterface) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCartItemInterface2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemInterface(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNCartItemProduct2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemProduct(ctx context.Context, sel ast.SelectionSet, v *model.CartItemProduct) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -14299,6 +14800,16 @@ func (ec *executionContext) marshalNReorderItemsOutput2ᚖgithubᚗcomᚋmagendo
 		return graphql.Null
 	}
 	return ec._ReorderItemsOutput(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNSearchResultPageInfo2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSearchResultPageInfo(ctx context.Context, sel ast.SelectionSet, v *model.SearchResultPageInfo) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SearchResultPageInfo(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSelectedBundleOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedBundleOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedBundleOption) graphql.Marshaler {
@@ -14940,6 +15451,13 @@ func (ec *executionContext) marshalOCartItemProductImage2ᚖgithubᚗcomᚋmagen
 		return graphql.Null
 	}
 	return ec._CartItemProductImage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCartItems2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItems(ctx context.Context, sel ast.SelectionSet, v *model.CartItems) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CartItems(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOCartPrices2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartPrices(ctx context.Context, sel ast.SelectionSet, v *model.CartPrices) graphql.Marshaler {

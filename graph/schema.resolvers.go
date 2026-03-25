@@ -13,6 +13,47 @@ import (
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 )
 
+// ItemsV2 is the resolver for the itemsV2 field.
+func (r *cartResolver) ItemsV2(ctx context.Context, obj *model.Cart, pageSize *int, currentPage *int) (*model.CartItems, error) {
+	ps := 20
+	if pageSize != nil && *pageSize > 0 {
+		ps = *pageSize
+	}
+	cp := 1
+	if currentPage != nil && *currentPage > 0 {
+		cp = *currentPage
+	}
+
+	all := obj.Items
+	total := len(all)
+	totalPages := (total + ps - 1) / ps
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	start := (cp - 1) * ps
+	end := start + ps
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	page := make([]model.CartItemInterface, end-start)
+	copy(page, all[start:end])
+
+	return &model.CartItems{
+		Items: page,
+		PageInfo: &model.SearchResultPageInfo{
+			CurrentPage: &cp,
+			PageSize:    &ps,
+			TotalPages:  &totalPages,
+		},
+		TotalCount: total,
+	}, nil
+}
+
 // CreateEmptyCart is the resolver for the createEmptyCart field.
 func (r *mutationResolver) CreateEmptyCart(ctx context.Context, input *model.CreateEmptyCartInput) (*string, error) {
 	maskedID, err := r.CartService.CreateEmptyCart(ctx)
@@ -239,11 +280,15 @@ func (r *queryResolver) CustomerCart(ctx context.Context) (*model.Cart, error) {
 	return r.CartService.GetCustomerCart(ctx)
 }
 
+// Cart returns CartResolver implementation.
+func (r *Resolver) Cart() CartResolver { return &cartResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+type cartResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
