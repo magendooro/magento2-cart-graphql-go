@@ -53,6 +53,9 @@ type OrderInput struct {
 
 	// Payment
 	PaymentMethod string
+
+	// Request metadata
+	RemoteIP string // client IP at time of order placement
 }
 
 // OrderItemInput holds per-item order data. QuoteParentItemID is the

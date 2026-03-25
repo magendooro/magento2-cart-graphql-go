@@ -226,7 +226,14 @@ func TestCompare_FullCheckoutFlow(t *testing.T) {
 				email
 				total_quantity
 				is_virtual
-				items { quantity product { sku } }
+				items {
+					quantity
+					product { sku }
+					prices {
+						row_total { value }
+						row_total_including_tax { value }
+					}
+				}
 				prices {
 					grand_total { value currency }
 					subtotal_excluding_tax { value }
@@ -541,6 +548,10 @@ func compareFinalCart(t *testing.T, goResp, mResp gqlResponse) {
 				Product  struct {
 					SKU string `json:"sku"`
 				} `json:"product"`
+				Prices struct {
+					RowTotal             struct{ Value float64 } `json:"row_total"`
+					RowTotalIncludingTax struct{ Value float64 } `json:"row_total_including_tax"`
+				} `json:"prices"`
 			} `json:"items"`
 			Prices struct {
 				GrandTotal           struct{ Value float64; Currency string } `json:"grand_total"`
@@ -582,6 +593,17 @@ func compareFinalCart(t *testing.T, goResp, mResp gqlResponse) {
 	assertEq(t, "final.subtotal_including_tax", goCart.Prices.SubtotalIncludingTax.Value, mCart.Prices.SubtotalIncludingTax.Value)
 	assertEq(t, "final.grand_total", goCart.Prices.GrandTotal.Value, mCart.Prices.GrandTotal.Value)
 	assertEq(t, "final.payment.code", goCart.SelectedPaymentMethod.Code, mCart.SelectedPaymentMethod.Code)
+
+	// Compare per-item row totals including tax
+	for i := range goCart.Items {
+		if i >= len(mCart.Items) {
+			break
+		}
+		assertEq(t, fmt.Sprintf("final.item[%d].row_total", i),
+			goCart.Items[i].Prices.RowTotal.Value, mCart.Items[i].Prices.RowTotal.Value)
+		assertEq(t, fmt.Sprintf("final.item[%d].row_total_including_tax", i),
+			goCart.Items[i].Prices.RowTotalIncludingTax.Value, mCart.Items[i].Prices.RowTotalIncludingTax.Value)
+	}
 
 	// Compare applied taxes
 	t.Logf("Go applied_taxes: %d, Magento applied_taxes: %d", len(goCart.Prices.AppliedTaxes), len(mCart.Prices.AppliedTaxes))

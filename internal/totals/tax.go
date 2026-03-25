@@ -2,6 +2,7 @@ package totals
 
 import (
 	"context"
+	"math"
 
 	"github.com/magendooro/magento2-go-common/config"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
@@ -81,13 +82,33 @@ func (c *TaxCollector) Collect(ctx context.Context, cc *CollectorContext, total 
 		return err
 	}
 
+	var productTaxTotal float64
 	for _, tr := range taxResults {
+		productTaxTotal += tr.TaxAmount
 		total.TaxAmount += tr.TaxAmount
 		total.AppliedTaxes = append(total.AppliedTaxes, AppliedTax{
 			Label:  tr.Label,
 			Amount: tr.TaxAmount,
 			Rate:   tr.Rate,
 		})
+	}
+
+	// Distribute per-item tax into total.ItemTaxes for accurate display
+	// and correct incl-tax amounts on order items.
+	var taxableSubtotal float64
+	for _, item := range cc.Items {
+		if item.ParentItemID == nil {
+			taxableSubtotal += item.RowTotal
+		}
+	}
+	if taxableSubtotal > 0 && productTaxTotal > 0 {
+		for _, item := range cc.Items {
+			if item.ParentItemID != nil {
+				continue
+			}
+			proportion := item.RowTotal / taxableSubtotal
+			total.ItemTaxes[item.ItemID] = math.Round(productTaxTotal*proportion*100) / 100
+		}
 	}
 
 	return nil

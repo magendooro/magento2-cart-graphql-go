@@ -15,6 +15,7 @@ import (
 	"github.com/magendooro/magento2-go-common/config"
 	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
 	cartmapper "github.com/magendooro/magento2-cart-graphql-go/internal/mapper"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/ctxkeys"
 	"github.com/magendooro/magento2-go-common/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/order"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
@@ -689,11 +690,24 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals collection for order failed")
 	}
 
+	// Populate per-item tax amounts from the pipeline so CartToOrder produces
+	// correct price_incl_tax and row_total_incl_tax on order items.
+	// Skip for inclusive-price stores: the price already contains tax.
+	if orderTotals != nil && !orderTotals.TaxIncludedInPrice {
+		for _, item := range items {
+			if item.ParentItemID == nil {
+				item.TaxAmount = orderTotals.ItemTaxes[item.ItemID]
+			}
+		}
+	}
+
 	orderIn := order.CartToOrder(cart, items, addrs, payment.Code, orderTotals)
 	// Attach product_options JSON to each order item
 	for i := range orderIn.Items {
 		orderIn.Items[i].ProductOptions = repository.BuildProductOptionsJSON(ctx, s.orderRepo.DB(), items[i], items)
 	}
+	orderIn.RemoteIP = ctxkeys.GetRemoteIP(ctx)
+
 	incrementID, err := order.Place(ctx, s.orderRepo.DB(), orderIn)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
