@@ -44,12 +44,20 @@ type MapCartInput struct {
 func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 	currency := model.CurrencyEnum(in.Cart.QuoteCurrencyCode)
 
+	// Compute product tax and tax mode once, reused for both items and subtotals.
+	var productTaxAmount float64
+	taxIncludedInPrice := in.DisplayTotals != nil && in.DisplayTotals.TaxIncludedInPrice
+	if in.DisplayTotals != nil {
+		productTaxAmount = in.DisplayTotals.TaxAmount - in.DisplayTotals.ShippingTaxAmount
+	}
+
 	cartItems := make([]model.CartItemInterface, 0, len(in.Items))
 	for _, item := range in.Items {
 		if item.ParentItemID != nil {
 			continue
 		}
-		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency))
+		rowTotalInclTax := itemRowTotalInclTax(item.ItemID, item.RowTotal, taxIncludedInPrice, in.DisplayTotals)
+		cartItems = append(cartItems, m.MapCartItem(ctx, item, in.Items, currency, rowTotalInclTax))
 	}
 
 	// Applied taxes
@@ -65,12 +73,8 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 	}
 
 	// Subtotal incl/excl tax
-	var productTaxAmount float64
-	if in.DisplayTotals != nil {
-		productTaxAmount = in.DisplayTotals.TaxAmount - in.DisplayTotals.ShippingTaxAmount
-	}
 	var subtotalInclTax float64
-	if in.DisplayTotals != nil && in.DisplayTotals.TaxIncludedInPrice {
+	if taxIncludedInPrice {
 		subtotalInclTax = in.Cart.Subtotal
 	} else {
 		subtotalInclTax = in.Cart.Subtotal + productTaxAmount
@@ -216,12 +220,13 @@ func (m *CartMapper) MapBillingAddress(ctx context.Context, a *repository.CartAd
 }
 
 // MapCartItem converts a CartItemData into the appropriate GraphQL cart item interface.
-func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {
+// rowTotalInclTax must be pre-computed by the caller (MapCart) from the pipeline totals.
+func (m *CartMapper) MapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum, rowTotalInclTax float64) model.CartItemInterface {
 	uid := EncodeUID(item.ItemID)
 	prices := &model.CartItemPrices{
 		Price:                &model.Money{Value: &item.Price, Currency: &currency},
 		RowTotal:             &model.Money{Value: &item.RowTotal, Currency: &currency},
-		RowTotalIncludingTax: &model.Money{Value: &item.RowTotal, Currency: &currency},
+		RowTotalIncludingTax: &model.Money{Value: &rowTotalInclTax, Currency: &currency},
 	}
 	if item.DiscountAmount > 0 {
 		prices.TotalItemDiscount = &model.Money{Value: &item.DiscountAmount, Currency: &currency}
@@ -431,6 +436,21 @@ func ToStringPtrs(ss []string) []*string {
 		result[i] = &ss[i]
 	}
 	return result
+}
+
+// itemRowTotalInclTax computes the tax-inclusive row total for a single cart item.
+// For inclusive-price stores, the row total already contains tax.
+// Otherwise, the item's share of product tax is looked up from pipeline results.
+func itemRowTotalInclTax(itemID int, rowTotal float64, taxIncludedInPrice bool, dt *totals.Total) float64 {
+	if taxIncludedInPrice {
+		return rowTotal
+	}
+	if dt != nil {
+		if tax := dt.ItemTaxes[itemID]; tax > 0 {
+			return math.Round((rowTotal+tax)*100) / 100
+		}
+	}
+	return rowTotal
 }
 
 // subtotalExclTax returns a pointer to the tax-exclusive subtotal.

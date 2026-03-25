@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1 + Phase 2 + Phase 3: Complete.** 33 tests (28 integration + 5 comparison). EU VAT, tax on shipping, virtual products, structured PlaceOrder errors, discount propagation, compound/stacked tax, tax-inclusive pricing all done.
+**Phase 1 + Phase 2 + Phase 3: Complete.** 34 tests (29 integration + 5 comparison). EU VAT, tax on shipping, virtual products, structured PlaceOrder errors, discount propagation, compound/stacked tax, tax-inclusive pricing, per-item row_total_including_tax, remote_ip capture all done.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
@@ -24,10 +24,12 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 - Place order: full transactional flow with correct sales_order fields, address ID backfill, grid data
 - Coupon codes: applyCouponToCart/removeCouponFromCart with by_percent, by_fixed, cart_fixed via DiscountCollector pipeline
 
-### Known gaps (documented as GitHub issues)
-- `product_options` JSON not stored on sales_order_item
-- `remote_ip` not captured on sales_order
-- `email_sent` not set (Go doesn't send order emails)
+### Known gaps
+- `email_sent` not set on sales_order — intentional; Go doesn't send transactional email
+- FPT/WEEE tax — out of scope
+
+### Comparison test coverage
+`TestCompare_FullCheckoutFlow` verifies: cart creation, addProducts (qty/price/subtotal), shipping address (region/country/available methods), billing address, shipping method (carrier/amount/grand_total), payment, guest email, final cart state (subtotals incl/excl tax, applied_taxes, per-item row_total_including_tax), placeOrder (order number format).
 
 ## Build & Test
 
@@ -103,8 +105,8 @@ The service-local `internal/config/config.go` (Viper struct) is kept — it's th
 - Customer tax class (default: Retail Customer, class 3)
 - tax_calculation_rate → tax_calculation → tax_calculation_rule join
 
-### What doesn't work yet
-- FPT/WEEE tax
+### Out of scope
+- FPT/WEEE tax — not planned
 
 ## Product Types
 

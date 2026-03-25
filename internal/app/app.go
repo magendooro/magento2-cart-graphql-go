@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph"
 	appconfig "github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/ctxkeys"
 	commoncache "github.com/magendooro/magento2-go-common/cache"
 	commonconfig "github.com/magendooro/magento2-go-common/config"
 	commondb "github.com/magendooro/magento2-go-common/database"
@@ -63,7 +66,7 @@ func New(cfg *appconfig.Config) (*App, error) {
 		Port:     cfg.Redis.Port,
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
-		Prefix:   "cust_gql:",
+		Prefix:   "cart_gql:",
 	})
 
 	return &App{cfg: cfg, db: db, cache: redisCache}, nil
@@ -117,6 +120,7 @@ func (a *App) Run() error {
 	})(h)
 	h = middleware.AuthMiddleware(tokenResolver)(h)
 	h = middleware.StoreMiddleware(storeResolver)(h)
+	h = ipMiddleware(h)
 	h = middleware.LoggingMiddleware(h)
 	h = middleware.CORSMiddleware(h)
 	h = middleware.RecoveryMiddleware(h)
@@ -155,4 +159,30 @@ func (a *App) Run() error {
 	}
 	log.Info().Msg("server stopped")
 	return nil
+}
+
+// ipMiddleware extracts the client IP from the request and stores it in context.
+func ipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := extractClientIP(r)
+		ctx := ctxkeys.WithRemoteIP(r.Context(), ip)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// extractClientIP returns the best-effort client IP from the request.
+// Respects X-Forwarded-For and X-Real-IP headers for reverse-proxy setups.
+func extractClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
