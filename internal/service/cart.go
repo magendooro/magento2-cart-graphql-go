@@ -329,24 +329,51 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 }
 
 func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, input *model.BillingAddressInput) (*model.Cart, error) {
+	// Input mutual-exclusivity validation — mirrors Magento checkForInputExceptions
+	sameAsShipping := input.SameAsShipping != nil && *input.SameAsShipping
+	if !sameAsShipping && input.CustomerAddressID == nil && input.Address == nil {
+		return nil, carterr.ErrBillingAddressInputMissing
+	}
+	if input.CustomerAddressID != nil && input.Address != nil {
+		return nil, carterr.ErrBillingAddressInputConflict
+	}
+
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return nil, err
+	}
+
 	switch {
-	case input.SameAsShipping != nil && *input.SameAsShipping:
+	case sameAsShipping:
+		// Validate shipping address exists and is set — mirrors validateCanUseShippingForBilling
 		addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+		var shippingAddrs []*repository.CartAddressData
 		for _, a := range addrs {
 			if a.AddressType == "shipping" {
-				street := strings.Split(a.Street, "\n")
-				s.addressRepo.SetAddress(ctx, quoteID, "billing",
-					a.Firstname, a.Lastname, a.City, a.CountryID, street,
-					a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
-				)
-				break
+				shippingAddrs = append(shippingAddrs, a)
 			}
 		}
+		if len(shippingAddrs) > 1 {
+			return nil, carterr.ErrSameAsShippingMultipleAddrs
+		}
+		if len(shippingAddrs) == 0 || shippingAddrs[0].CountryID == "" {
+			return nil, carterr.ErrSameAsShippingNotSet
+		}
+		sa := shippingAddrs[0]
+		street := strings.Split(sa.Street, "\n")
+		if _, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
+			sa.Firstname, sa.Lastname, sa.City, sa.CountryID, street,
+			sa.Company, sa.Region, sa.Postcode, sa.Telephone, sa.RegionID,
+		); err != nil {
+			return nil, fmt.Errorf("failed to set billing address: %w", err)
+		}
+		// Magento sets same_as_billing=1 on the shipping address row
+		s.addressRepo.SetSameAsBilling(ctx, quoteID, 1)
+
 	case input.CustomerAddressID != nil:
 		customerID := middleware.GetCustomerID(ctx)
 		if customerID == 0 {
@@ -362,14 +389,17 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 		); err != nil {
 			return nil, fmt.Errorf("failed to set billing address: %w", err)
 		}
+		s.addressRepo.SetSameAsBilling(ctx, quoteID, 0)
+
 	case input.Address != nil:
 		a := input.Address
 		if _, err := s.addressRepo.SetAddress(ctx, quoteID, "billing",
 			a.Firstname, a.Lastname, a.City, a.CountryCode, a.Street,
 			a.Company, a.Region, a.Postcode, a.Telephone, a.RegionID,
 		); err != nil {
-			return nil, fmt.Errorf("Failed to set billing address: %w", err)
+			return nil, fmt.Errorf("failed to set billing address: %w", err)
 		}
+		s.addressRepo.SetSameAsBilling(ctx, quoteID, 0)
 	}
 
 	return s.GetCart(ctx, maskedID)
@@ -589,6 +619,10 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 	}
 
 	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	if len(items) == 0 {
+		return nil, fmt.Errorf("Cart does not contain products.")
+	}
+
 	targetSkus := s.couponRepo.GetRuleActionSkus(ctx, rule.RuleID)
 	skuSet := make(map[string]bool, len(targetSkus))
 	for _, sk := range targetSkus {
