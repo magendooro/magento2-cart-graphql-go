@@ -301,6 +301,22 @@ func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string,
 	if err := s.recalculateTotals(ctx, quoteID); err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
 	}
+
+	// Persist rates to quote_shipping_rate — Magento writes these during
+	// collectShippingRates() so that selected_shipping_method can read
+	// carrier_title/method_title from storage later.
+	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
+	items, _ := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	freshAddrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+	storeID := middleware.GetStoreID(ctx)
+	for _, a := range freshAddrs {
+		if a.AddressType == "shipping" {
+			req := s.buildRateRequest(storeID, a, cart, items)
+			rates := s.shippingRegistry.CollectRates(ctx, req)
+			s.shippingRepo.SaveRates(ctx, a.AddressID, rates)
+		}
+	}
+
 	return s.GetCart(ctx, maskedID)
 }
 
@@ -383,6 +399,10 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 			}
 			desc := selectedRate.CarrierTitle + " - " + selectedRate.MethodTitle
 			s.shippingRepo.SetShippingMethod(ctx, a.AddressID, selectedRate.CarrierCode, selectedRate.MethodCode, selectedRate.Price, desc)
+			// Persist all collected rates to quote_shipping_rate so that
+			// selected_shipping_method reads carrier_title/method_title from
+			// storage — the same source Magento uses.
+			s.shippingRepo.SaveRates(ctx, a.AddressID, rates)
 			break
 		}
 	}
@@ -784,12 +804,18 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 
 	storeID := middleware.GetStoreID(ctx)
 
-	// Pre-fetch shipping rates per address
+	// Pre-fetch shipping rates per address (fresh, for available_shipping_methods).
+	// Also load the persisted selected rate from quote_shipping_rate (for
+	// selected_shipping_method carrier_title/method_title — same source Magento uses).
 	shippingRates := make(map[int][]*shipping.Rate)
+	storedRates := make(map[int]*repository.StoredShippingRate)
 	for _, a := range addrs {
 		if a.AddressType == "shipping" {
 			req := s.buildRateRequest(storeID, a, cart, items)
 			shippingRates[a.AddressID] = s.shippingRegistry.CollectRates(ctx, req)
+			if a.ShippingMethod != nil && *a.ShippingMethod != "" {
+				storedRates[a.AddressID] = s.shippingRepo.LoadRateByCode(ctx, a.AddressID, *a.ShippingMethod)
+			}
 		}
 	}
 
@@ -813,6 +839,7 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 		Addrs:           addrs,
 		DisplayTotals:   displayTotals,
 		ShippingRates:   shippingRates,
+		StoredRates:     storedRates,
 		AvailPayments:   availPayments,
 		SelectedPayment: selectedPayment,
 		MaskedID:        maskedID,

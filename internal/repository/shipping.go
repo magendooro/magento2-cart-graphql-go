@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/magendooro/magento2-go-common/config"
+
+	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
 )
 
 // ShippingRate holds a single available shipping rate.
@@ -159,4 +161,56 @@ func (r *ShippingRepository) SetShippingMethod(ctx context.Context, addressID in
 		method, description, amount, amount, addressID,
 	)
 	return err
+}
+
+// StoredShippingRate mirrors a quote_shipping_rate row.
+type StoredShippingRate struct {
+	Code         string // carrier_code + "_" + method_code
+	Carrier      string
+	CarrierTitle string
+	Method       string
+	MethodTitle  string
+	Price        float64
+}
+
+// SaveRates replaces all stored rates for an address in quote_shipping_rate.
+// Magento writes rates here when collectShippingRates() runs; we mirror that
+// so selected_shipping_method can read carrier_title/method_title from storage
+// rather than re-deriving them live.
+func (r *ShippingRepository) SaveRates(ctx context.Context, addressID int, rates []*shipping.Rate) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM quote_shipping_rate WHERE address_id = ?", addressID)
+	if err != nil {
+		return err
+	}
+	for _, rate := range rates {
+		code := rate.CarrierCode + "_" + rate.MethodCode
+		_, err := r.db.ExecContext(ctx, `
+			INSERT INTO quote_shipping_rate
+			    (address_id, carrier, carrier_title, code, method, method_title, price, error_message)
+			VALUES (?, ?, ?, ?, ?, ?, ?, '')`,
+			addressID, rate.CarrierCode, rate.CarrierTitle,
+			code, rate.MethodCode, rate.MethodTitle, rate.Price,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// LoadRateByCode returns the stored rate for an address whose code matches
+// the given shipping_method string (e.g. "tablerate_bestway"). Returns nil
+// if no matching rate is found.
+func (r *ShippingRepository) LoadRateByCode(ctx context.Context, addressID int, code string) *StoredShippingRate {
+	var sr StoredShippingRate
+	err := r.db.QueryRowContext(ctx, `
+		SELECT code, carrier, carrier_title, method, method_title, price
+		FROM quote_shipping_rate
+		WHERE address_id = ? AND code = ?`,
+		addressID, code,
+	).Scan(&sr.Code, &sr.Carrier, &sr.CarrierTitle, &sr.Method, &sr.MethodTitle, &sr.Price)
+	if err != nil {
+		return nil
+	}
+	return &sr
 }

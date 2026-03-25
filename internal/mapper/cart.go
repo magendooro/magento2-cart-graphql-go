@@ -37,7 +37,8 @@ type MapCartInput struct {
 	Items           []*repository.CartItemData
 	Addrs           []*repository.CartAddressData
 	DisplayTotals   *totals.Total
-	ShippingRates   map[int][]*shipping.Rate // keyed by address ID
+	ShippingRates   map[int][]*shipping.Rate          // keyed by address ID — fresh, for available_shipping_methods
+	StoredRates     map[int]*repository.StoredShippingRate // keyed by address ID — persisted selected rate, for selected_shipping_method
 	AvailPayments   []*repository.PaymentMethod
 	SelectedPayment *repository.PaymentMethod // nil if none selected
 	MaskedID        string
@@ -154,7 +155,8 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 		switch a.AddressType {
 		case "shipping":
 			rates := in.ShippingRates[a.AddressID]
-			sa := m.MapShippingAddress(ctx, a, rates, currency)
+			storedRate := in.StoredRates[a.AddressID]
+			sa := m.MapShippingAddress(ctx, a, rates, storedRate, currency)
 			result.ShippingAddresses = append(result.ShippingAddresses, sa)
 		case "billing":
 			result.BillingAddress = m.MapBillingAddress(ctx, a)
@@ -182,7 +184,8 @@ func (m *CartMapper) MapCart(ctx context.Context, in MapCartInput) *model.Cart {
 }
 
 // MapShippingAddress converts a shipping CartAddressData plus pre-fetched rates into the GraphQL type.
-func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartAddressData, rates []*shipping.Rate, currency model.CurrencyEnum) *model.ShippingCartAddress {
+// storedRate is the persisted quote_shipping_rate row for the selected method (may be nil).
+func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartAddressData, rates []*shipping.Rate, storedRate *repository.StoredShippingRate, currency model.CurrencyEnum) *model.ShippingCartAddress {
 	addr := &model.ShippingCartAddress{
 		Firstname: a.Firstname,
 		Lastname:  a.Lastname,
@@ -204,16 +207,14 @@ func (m *CartMapper) MapShippingAddress(ctx context.Context, a *repository.CartA
 	if a.ShippingMethod != nil {
 		parts := strings.SplitN(*a.ShippingMethod, "_", 2)
 		if len(parts) == 2 {
-			// Resolve human-readable titles from the already-collected rates,
-			// which were produced by the carrier using its config values.
+			// Titles come from quote_shipping_rate (the same source Magento uses).
+			// storedRate is the persisted row written when rates were last collected.
+			// Fall back to carrier/method codes only if the row is absent.
 			carrierTitle := parts[0]
 			methodTitle := parts[1]
-			for _, r := range rates {
-				if r.CarrierCode == parts[0] && r.MethodCode == parts[1] {
-					carrierTitle = r.CarrierTitle
-					methodTitle = r.MethodTitle
-					break
-				}
+			if storedRate != nil {
+				carrierTitle = storedRate.CarrierTitle
+				methodTitle = storedRate.MethodTitle
 			}
 			shippingMoney := &model.Money{Value: &a.ShippingAmount, Currency: nil}
 			addr.SelectedShippingMethod = &model.SelectedShippingMethod{
