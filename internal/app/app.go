@@ -66,7 +66,7 @@ func New(cfg *appconfig.Config) (*App, error) {
 		Port:     cfg.Redis.Port,
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
-		Prefix:   "cust_gql:",
+		Prefix:   "cart_gql:",
 	})
 
 	return &App{cfg: cfg, db: db, cache: redisCache}, nil
