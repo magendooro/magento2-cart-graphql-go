@@ -993,6 +993,813 @@ func TestCompare_EmptyCartPlaceOrder(t *testing.T) {
 	t.Log("PASS: Go returns structured PlaceOrderError for empty cart")
 }
 
+// ─── Tutorial Checkout Comparison ───────────────────────────────────────────
+
+// TestCompare_TutorialCheckout reproduces the Adobe Commerce GraphQL checkout
+// tutorial (https://developer.adobe.com/commerce/webapi/graphql/tutorials/checkout/)
+// step by step on both the Go service and Magento PHP, comparing the response
+// at every mutation.
+//
+// Adaptations from the tutorial:
+//   - Product: 24-MG04 (Aim Analog Watch, $45) — same as tutorial
+//   - Address: 3320 N Crescent Dr, Beverly Hills CA 90210 — same as tutorial
+//   - Shipping: tablerate/bestway — same as tutorial
+//   - Coupon: H20 (70% off, applies to all products) — tutorial uses Watch20
+//     which doesn't exist in the sample data; H20 is the available equivalent
+//   - Payment: checkmo — same as tutorial
+//
+// The test reveals gaps where our responses diverge from Magento's.
+func TestCompare_TutorialCheckout(t *testing.T) {
+	// ── Step 2: Create guest cart (tutorial uses createGuestCart) ────────────
+	goResp := doQuery(t, `mutation { createGuestCart { cart { id } } }`, "")
+	mResp := doMagentoQuery(t, `mutation { createGuestCart { cart { id } } }`, "")
+
+	type guestCartResp struct {
+		CreateGuestCart struct {
+			Cart struct {
+				ID string `json:"id"`
+			} `json:"cart"`
+		} `json:"createGuestCart"`
+	}
+	var goGC, mGC guestCartResp
+	if err := json.Unmarshal(goResp.Data, &goGC); err != nil || goGC.CreateGuestCart.Cart.ID == "" {
+		t.Fatalf("Go createGuestCart failed: err=%v resp=%s", err, string(goResp.Data))
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento createGuestCart error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(mResp.Data, &mGC)
+	goCartID := goGC.CreateGuestCart.Cart.ID
+	mCartID := mGC.CreateGuestCart.Cart.ID
+	t.Logf("Step 2 PASS: createGuestCart — Go=%s Magento=%s", goCartID[:8]+"...", mCartID[:8]+"...")
+
+	// ── Step 3: Add products — tutorial uses addSimpleProductsToCart ─────────
+	addQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			addSimpleProductsToCart(input: {
+				cart_id: "%s"
+				cart_items: [{ data: { sku: "24-MG04", quantity: 2 } }]
+			}) {
+				cart {
+					total_quantity
+					items {
+						quantity
+						product { sku }
+						prices {
+							price { value }
+							row_total { value }
+							row_total_including_tax { value }
+						}
+					}
+					prices {
+						subtotal_excluding_tax { value }
+						grand_total { value }
+					}
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, addQ(goCartID), "")
+	mResp = doMagentoQuery(t, addQ(mCartID), "")
+
+	type addSimpleResp struct {
+		AddSimpleProductsToCart struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					Quantity float64 `json:"quantity"`
+					Product  struct{ SKU string `json:"sku"` } `json:"product"`
+					Prices   struct {
+						Price                struct{ Value float64 } `json:"price"`
+						RowTotal             struct{ Value float64 } `json:"row_total"`
+						RowTotalIncludingTax struct{ Value float64 } `json:"row_total_including_tax"`
+					} `json:"prices"`
+				} `json:"items"`
+				Prices struct {
+					SubtotalExcludingTax struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					GrandTotal           struct{ Value float64 } `json:"grand_total"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"addSimpleProductsToCart"`
+	}
+
+	var goAdd, mAdd addSimpleResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go addSimpleProductsToCart error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento addSimpleProductsToCart error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goAdd)
+	json.Unmarshal(mResp.Data, &mAdd)
+
+	goAddCart := goAdd.AddSimpleProductsToCart.Cart
+	mAddCart := mAdd.AddSimpleProductsToCart.Cart
+	assertEq(t, "step3.total_quantity", goAddCart.TotalQuantity, mAddCart.TotalQuantity)
+	assertEq(t, "step3.subtotal", goAddCart.Prices.SubtotalExcludingTax.Value, mAddCart.Prices.SubtotalExcludingTax.Value)
+	if len(goAddCart.Items) > 0 && len(mAddCart.Items) > 0 {
+		assertEq(t, "step3.item.sku", goAddCart.Items[0].Product.SKU, mAddCart.Items[0].Product.SKU)
+		assertEq(t, "step3.item.qty", goAddCart.Items[0].Quantity, mAddCart.Items[0].Quantity)
+		assertEq(t, "step3.item.price", goAddCart.Items[0].Prices.Price.Value, mAddCart.Items[0].Prices.Price.Value)
+		assertEq(t, "step3.item.row_total", goAddCart.Items[0].Prices.RowTotal.Value, mAddCart.Items[0].Prices.RowTotal.Value)
+		assertEq(t, "step3.item.row_total_incl_tax", goAddCart.Items[0].Prices.RowTotalIncludingTax.Value, mAddCart.Items[0].Prices.RowTotalIncludingTax.Value)
+	}
+	t.Logf("Step 3 PASS: addSimpleProductsToCart — qty=%.0f subtotal=%.2f", goAddCart.TotalQuantity, goAddCart.Prices.SubtotalExcludingTax.Value)
+
+	// ── Step 4: Set shipping address (Beverly Hills, CA — tutorial address) ──
+	shippingAddrQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			setShippingAddressesOnCart(input: {
+				cart_id: "%s"
+				shipping_addresses: [{
+					address: {
+						firstname: "John"
+						lastname:  "Doe"
+						street:    ["3320 N Crescent Dr", "Beverly Hills"]
+						city:      "Los Angeles"
+						region:    "CA"
+						region_id: 12
+						postcode:  "90210"
+						country_code: "US"
+						telephone: "5555555555"
+					}
+				}]
+			}) {
+				cart {
+					shipping_addresses {
+						firstname lastname city postcode
+						region    { code label region_id }
+						country   { code }
+						available_shipping_methods {
+							carrier_code method_code
+							amount { value currency }
+							price_excl_tax { value }
+							price_incl_tax { value }
+							available
+						}
+					}
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, shippingAddrQ(goCartID), "")
+	mResp = doMagentoQuery(t, shippingAddrQ(mCartID), "")
+
+	type shippingAddrResp struct {
+		SetShippingAddressesOnCart struct {
+			Cart struct {
+				ShippingAddresses []struct {
+					Firstname string `json:"firstname"`
+					Lastname  string `json:"lastname"`
+					City      string `json:"city"`
+					Postcode  string `json:"postcode"`
+					Region    struct {
+						Code     string `json:"code"`
+						Label    string `json:"label"`
+						RegionID int    `json:"region_id"`
+					} `json:"region"`
+					Country struct{ Code string } `json:"country"`
+					AvailableShippingMethods []struct {
+						CarrierCode  string `json:"carrier_code"`
+						MethodCode   string `json:"method_code"`
+						Available    bool   `json:"available"`
+						Amount       struct{ Value float64; Currency string } `json:"amount"`
+						PriceExclTax struct{ Value float64 }                 `json:"price_excl_tax"`
+						PriceInclTax struct{ Value float64 }                 `json:"price_incl_tax"`
+					} `json:"available_shipping_methods"`
+				} `json:"shipping_addresses"`
+			} `json:"cart"`
+		} `json:"setShippingAddressesOnCart"`
+	}
+
+	var goSA, mSA shippingAddrResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go setShippingAddresses error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento setShippingAddresses error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goSA)
+	json.Unmarshal(mResp.Data, &mSA)
+
+	goSAddrs := goSA.SetShippingAddressesOnCart.Cart.ShippingAddresses
+	mSAddrs := mSA.SetShippingAddressesOnCart.Cart.ShippingAddresses
+
+	if len(goSAddrs) == 0 || len(mSAddrs) == 0 {
+		t.Fatalf("step4: expected shipping address in response (Go=%d, Magento=%d)", len(goSAddrs), len(mSAddrs))
+	}
+	assertEq(t, "step4.firstname", goSAddrs[0].Firstname, mSAddrs[0].Firstname)
+	assertEq(t, "step4.city", goSAddrs[0].City, mSAddrs[0].City)
+	assertEq(t, "step4.postcode", goSAddrs[0].Postcode, mSAddrs[0].Postcode)
+	assertEq(t, "step4.region.code", goSAddrs[0].Region.Code, mSAddrs[0].Region.Code)
+	assertEq(t, "step4.region.label", goSAddrs[0].Region.Label, mSAddrs[0].Region.Label)
+	assertEq(t, "step4.country.code", goSAddrs[0].Country.Code, mSAddrs[0].Country.Code)
+
+	// Compare available shipping methods — both sides must offer the same set.
+	goMethods := make(map[string]float64)
+	for _, m := range goSAddrs[0].AvailableShippingMethods {
+		goMethods[m.CarrierCode+"_"+m.MethodCode] = m.Amount.Value
+	}
+	for _, m := range mSAddrs[0].AvailableShippingMethods {
+		key := m.CarrierCode + "_" + m.MethodCode
+		if _, ok := goMethods[key]; !ok {
+			t.Errorf("step4: Magento offers %s but Go does not", key)
+		} else {
+			assertEq(t, "step4.method."+key+".amount", goMethods[key], m.Amount.Value)
+		}
+	}
+	// Also flag methods Go offers that Magento does not (over-returning).
+	mMethods := make(map[string]bool)
+	for _, m := range mSAddrs[0].AvailableShippingMethods {
+		mMethods[m.CarrierCode+"_"+m.MethodCode] = true
+	}
+	for _, m := range goSAddrs[0].AvailableShippingMethods {
+		key := m.CarrierCode + "_" + m.MethodCode
+		if !mMethods[key] {
+			t.Errorf("step4: Go offers %s but Magento does not (extra method)", key)
+		}
+	}
+
+	// Verify price_excl_tax / price_incl_tax are present (new fields from gap closure).
+	for _, m := range goSAddrs[0].AvailableShippingMethods {
+		if m.PriceExclTax.Value == 0 && m.Amount.Value != 0 {
+			t.Errorf("step4: price_excl_tax=0 for %s_%s but amount=%.2f", m.CarrierCode, m.MethodCode, m.Amount.Value)
+		}
+	}
+
+	t.Logf("Step 4 PASS: setShippingAddressesOnCart — Go methods=%d Magento methods=%d",
+		len(goSAddrs[0].AvailableShippingMethods), len(mSAddrs[0].AvailableShippingMethods))
+
+	// ── Step 5: Set billing address ──────────────────────────────────────────
+	billingAddrQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			setBillingAddressOnCart(input: {
+				cart_id: "%s"
+				billing_address: {
+					address: {
+						firstname: "John"
+						lastname:  "Doe"
+						street:    ["3320 N Crescent Dr", "Beverly Hills"]
+						city:      "Los Angeles"
+						region:    "CA"
+						region_id: 12
+						postcode:  "90210"
+						country_code: "US"
+						telephone: "5555555555"
+					}
+				}
+			}) {
+				cart {
+					billing_address {
+						firstname lastname city postcode
+						region    { code label }
+						country   { code }
+					}
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, billingAddrQ(goCartID), "")
+	mResp = doMagentoQuery(t, billingAddrQ(mCartID), "")
+
+	type billingAddrResp struct {
+		SetBillingAddressOnCart struct {
+			Cart struct {
+				BillingAddress struct {
+					Firstname string `json:"firstname"`
+					City      string `json:"city"`
+					Postcode  string `json:"postcode"`
+					Region    struct{ Code, Label string } `json:"region"`
+					Country   struct{ Code string }        `json:"country"`
+				} `json:"billing_address"`
+			} `json:"cart"`
+		} `json:"setBillingAddressOnCart"`
+	}
+
+	var goBA, mBA billingAddrResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go setBillingAddress error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento setBillingAddress error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goBA)
+	json.Unmarshal(mResp.Data, &mBA)
+
+	goB := goBA.SetBillingAddressOnCart.Cart.BillingAddress
+	mB := mBA.SetBillingAddressOnCart.Cart.BillingAddress
+	assertEq(t, "step5.firstname", goB.Firstname, mB.Firstname)
+	assertEq(t, "step5.city", goB.City, mB.City)
+	assertEq(t, "step5.postcode", goB.Postcode, mB.Postcode)
+	assertEq(t, "step5.region.code", goB.Region.Code, mB.Region.Code)
+	assertEq(t, "step5.country.code", goB.Country.Code, mB.Country.Code)
+	t.Log("Step 5 PASS: setBillingAddressOnCart matches")
+
+	// ── Step 6: Set shipping method — tutorial uses tablerate/bestway ────────
+	shipMethodQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			setShippingMethodsOnCart(input: {
+				cart_id: "%s"
+				shipping_methods: [{ carrier_code: "tablerate", method_code: "bestway" }]
+			}) {
+				cart {
+					shipping_addresses {
+						selected_shipping_method {
+							carrier_code method_code carrier_title method_title
+							amount { value currency }
+							price_excl_tax { value }
+							price_incl_tax { value }
+						}
+					}
+					prices {
+						subtotal_excluding_tax { value }
+						grand_total { value }
+					}
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, shipMethodQ(goCartID), "")
+	mResp = doMagentoQuery(t, shipMethodQ(mCartID), "")
+
+	type shipMethodResp struct {
+		SetShippingMethodsOnCart struct {
+			Cart struct {
+				ShippingAddresses []struct {
+					SelectedShippingMethod struct {
+						CarrierCode  string             `json:"carrier_code"`
+						MethodCode   string             `json:"method_code"`
+						CarrierTitle string             `json:"carrier_title"`
+						MethodTitle  string             `json:"method_title"`
+						Amount       struct{ Value float64; Currency string } `json:"amount"`
+						PriceExclTax struct{ Value float64 }                 `json:"price_excl_tax"`
+						PriceInclTax struct{ Value float64 }                 `json:"price_incl_tax"`
+					} `json:"selected_shipping_method"`
+				} `json:"shipping_addresses"`
+				Prices struct {
+					SubtotalExcludingTax struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					GrandTotal           struct{ Value float64 } `json:"grand_total"`
+				} `json:"prices"`
+			} `json:"cart"`
+		} `json:"setShippingMethodsOnCart"`
+	}
+
+	var goSM, mSM shipMethodResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go setShippingMethods error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento setShippingMethods error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goSM)
+	json.Unmarshal(mResp.Data, &mSM)
+
+	goSMCart := goSM.SetShippingMethodsOnCart.Cart
+	mSMCart := mSM.SetShippingMethodsOnCart.Cart
+	assertEq(t, "step6.subtotal", goSMCart.Prices.SubtotalExcludingTax.Value, mSMCart.Prices.SubtotalExcludingTax.Value)
+	assertEq(t, "step6.grand_total", goSMCart.Prices.GrandTotal.Value, mSMCart.Prices.GrandTotal.Value)
+	if len(goSMCart.ShippingAddresses) > 0 && len(mSMCart.ShippingAddresses) > 0 {
+		goSSM := goSMCart.ShippingAddresses[0].SelectedShippingMethod
+		mSSM := mSMCart.ShippingAddresses[0].SelectedShippingMethod
+		assertEq(t, "step6.carrier_code", goSSM.CarrierCode, mSSM.CarrierCode)
+		assertEq(t, "step6.method_code", goSSM.MethodCode, mSSM.MethodCode)
+		assertEq(t, "step6.amount", goSSM.Amount.Value, mSSM.Amount.Value)
+		assertEq(t, "step6.carrier_title", goSSM.CarrierTitle, mSSM.CarrierTitle)
+		assertEq(t, "step6.method_title", goSSM.MethodTitle, mSSM.MethodTitle)
+	}
+	t.Logf("Step 6 PASS: setShippingMethodsOnCart — tablerate amount=%.2f grand_total=%.2f",
+		goSMCart.ShippingAddresses[0].SelectedShippingMethod.Amount.Value,
+		goSMCart.Prices.GrandTotal.Value)
+
+	// ── Step 7: Apply coupon (tutorial uses Watch20; we use H20) ─────────────
+	couponQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			applyCouponToCart(input: { cart_id: "%s", coupon_code: "H20" }) {
+				cart {
+					applied_coupons { code }
+					prices {
+						subtotal_excluding_tax               { value }
+						subtotal_with_discount_excluding_tax { value }
+						grand_total                          { value }
+						discounts { amount { value } label applied_to }
+					}
+					items {
+						prices { total_item_discount { value } }
+					}
+				}
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, couponQ(goCartID), "")
+	mResp = doMagentoQuery(t, couponQ(mCartID), "")
+
+	type couponApplyResp struct {
+		ApplyCouponToCart struct {
+			Cart struct {
+				AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+				Prices         struct {
+					SubtotalExcludingTax             struct{ Value float64 } `json:"subtotal_excluding_tax"`
+					SubtotalWithDiscountExcludingTax struct{ Value float64 } `json:"subtotal_with_discount_excluding_tax"`
+					GrandTotal                       struct{ Value float64 } `json:"grand_total"`
+					Discounts                        []struct {
+						Amount    struct{ Value float64 } `json:"amount"`
+						Label     string                  `json:"label"`
+						AppliedTo string                  `json:"applied_to"`
+					} `json:"discounts"`
+				} `json:"prices"`
+				Items []struct {
+					Prices struct {
+						TotalItemDiscount *struct{ Value float64 } `json:"total_item_discount"`
+					} `json:"prices"`
+				} `json:"items"`
+			} `json:"cart"`
+		} `json:"applyCouponToCart"`
+	}
+
+	var goCP, mCP couponApplyResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go applyCoupon error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento applyCoupon error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goCP)
+	json.Unmarshal(mResp.Data, &mCP)
+
+	goCouponCart := goCP.ApplyCouponToCart.Cart
+	mCouponCart := mCP.ApplyCouponToCart.Cart
+	if len(goCouponCart.AppliedCoupons) > 0 && len(mCouponCart.AppliedCoupons) > 0 {
+		assertEq(t, "step7.coupon.code", goCouponCart.AppliedCoupons[0].Code, mCouponCart.AppliedCoupons[0].Code)
+	}
+	assertEq(t, "step7.subtotal", goCouponCart.Prices.SubtotalExcludingTax.Value, mCouponCart.Prices.SubtotalExcludingTax.Value)
+	assertEq(t, "step7.subtotal_with_discount", goCouponCart.Prices.SubtotalWithDiscountExcludingTax.Value, mCouponCart.Prices.SubtotalWithDiscountExcludingTax.Value)
+	assertEq(t, "step7.grand_total", goCouponCart.Prices.GrandTotal.Value, mCouponCart.Prices.GrandTotal.Value)
+	if len(goCouponCart.Prices.Discounts) > 0 && len(mCouponCart.Prices.Discounts) > 0 {
+		assertEq(t, "step7.discount_amount", goCouponCart.Prices.Discounts[0].Amount.Value, mCouponCart.Prices.Discounts[0].Amount.Value)
+		// applied_to is a new field — check Go populates it (Magento may not have it)
+		if goCouponCart.Prices.Discounts[0].AppliedTo == "" {
+			t.Error("step7: applied_to should be non-empty on cart-level discount")
+		}
+	}
+	t.Logf("Step 7 PASS: applyCouponToCart H20 — subtotal=%.2f discount=%.2f grand_total=%.2f",
+		goCouponCart.Prices.SubtotalExcludingTax.Value,
+		goCouponCart.Prices.SubtotalWithDiscountExcludingTax.Value,
+		goCouponCart.Prices.GrandTotal.Value)
+
+	// ── Step 8: Set guest email ───────────────────────────────────────────────
+	emailQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			setGuestEmailOnCart(input: { cart_id: "%s", email: "guest@tutorial-example.com" }) {
+				cart { email }
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, emailQ(goCartID), "")
+	mResp = doMagentoQuery(t, emailQ(mCartID), "")
+
+	type emailResp2 struct {
+		SetGuestEmailOnCart struct {
+			Cart struct{ Email string `json:"email"` } `json:"cart"`
+		} `json:"setGuestEmailOnCart"`
+	}
+
+	var goEM, mEM emailResp2
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go setGuestEmail error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento setGuestEmail error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goEM)
+	json.Unmarshal(mResp.Data, &mEM)
+	assertEq(t, "step8.email", goEM.SetGuestEmailOnCart.Cart.Email, mEM.SetGuestEmailOnCart.Cart.Email)
+	t.Log("Step 8 PASS: setGuestEmailOnCart matches")
+
+	// ── Step 9: Query available payment methods then set payment ─────────────
+	paymentMethodsQ := func(id string) string {
+		return fmt.Sprintf(`{ cart(cart_id: "%s") { available_payment_methods { code title } } }`, id)
+	}
+
+	goResp = doQuery(t, paymentMethodsQ(goCartID), "")
+	mResp = doMagentoQuery(t, paymentMethodsQ(mCartID), "")
+
+	type payMethodsResp struct {
+		Cart struct {
+			AvailablePaymentMethods []struct {
+				Code  string `json:"code"`
+				Title string `json:"title"`
+			} `json:"available_payment_methods"`
+		} `json:"cart"`
+	}
+
+	var goPM, mPM payMethodsResp
+	json.Unmarshal(goResp.Data, &goPM)
+	json.Unmarshal(mResp.Data, &mPM)
+
+	// Build sets for comparison.
+	goPayCodes := make(map[string]bool)
+	for _, p := range goPM.Cart.AvailablePaymentMethods {
+		goPayCodes[p.Code] = true
+	}
+	mPayCodes := make(map[string]bool)
+	for _, p := range mPM.Cart.AvailablePaymentMethods {
+		mPayCodes[p.Code] = true
+	}
+	for code := range mPayCodes {
+		if !goPayCodes[code] {
+			t.Errorf("step9: Magento offers payment method %q but Go does not", code)
+		}
+	}
+	for code := range goPayCodes {
+		if !mPayCodes[code] {
+			t.Errorf("step9: Go offers payment method %q but Magento does not", code)
+		}
+	}
+	if !goPayCodes["checkmo"] {
+		t.Error("step9: checkmo must be available")
+	}
+	t.Logf("Step 9a PASS: available_payment_methods — Go=%d Magento=%d", len(goPM.Cart.AvailablePaymentMethods), len(mPM.Cart.AvailablePaymentMethods))
+
+	setPayQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			setPaymentMethodOnCart(input: { cart_id: "%s", payment_method: { code: "checkmo" } }) {
+				cart { selected_payment_method { code title } }
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, setPayQ(goCartID), "")
+	mResp = doMagentoQuery(t, setPayQ(mCartID), "")
+
+	type setPayResp struct {
+		SetPaymentMethodOnCart struct {
+			Cart struct {
+				SelectedPaymentMethod struct {
+					Code  string  `json:"code"`
+					Title *string `json:"title"`
+				} `json:"selected_payment_method"`
+			} `json:"cart"`
+		} `json:"setPaymentMethodOnCart"`
+	}
+
+	var goSP, mSP setPayResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go setPaymentMethod error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento setPaymentMethod error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goSP)
+	json.Unmarshal(mResp.Data, &mSP)
+	assertEq(t, "step9b.payment.code",
+		goSP.SetPaymentMethodOnCart.Cart.SelectedPaymentMethod.Code,
+		mSP.SetPaymentMethodOnCart.Cart.SelectedPaymentMethod.Code)
+	t.Log("Step 9b PASS: setPaymentMethodOnCart — checkmo selected")
+
+	// ── Final cart state before placing order ────────────────────────────────
+	finalCartQ := func(id string) string {
+		return fmt.Sprintf(`{
+			cart(cart_id: "%s") {
+				email
+				total_quantity
+				is_virtual
+				items {
+					quantity
+					product { sku url_key }
+					prices {
+						price                { value }
+						row_total            { value }
+						row_total_including_tax { value }
+						total_item_discount  { value }
+						discounts            { amount { value } applied_to }
+					}
+				}
+				itemsV2(pageSize: 20, currentPage: 1) {
+					total_count
+					page_info { current_page page_size total_pages }
+				}
+				prices {
+					grand_total                          { value currency }
+					subtotal_excluding_tax               { value }
+					subtotal_including_tax               { value }
+					subtotal_with_discount_excluding_tax { value }
+					applied_taxes { amount { value } label }
+					discounts { amount { value } label applied_to }
+				}
+				applied_coupons { code }
+				shipping_addresses {
+					city postcode
+					region  { code }
+					country { code }
+					selected_shipping_method {
+						carrier_code method_code
+						amount       { value }
+						price_excl_tax { value }
+						price_incl_tax { value }
+					}
+				}
+				billing_address  { city postcode country { code } }
+				selected_payment_method { code }
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, finalCartQ(goCartID), "")
+	mResp = doMagentoQuery(t, finalCartQ(mCartID), "")
+
+	type finalCartRespT struct {
+		Cart struct {
+			Email         string  `json:"email"`
+			TotalQuantity float64 `json:"total_quantity"`
+			IsVirtual     bool    `json:"is_virtual"`
+			Items         []struct {
+				Quantity float64 `json:"quantity"`
+				Product  struct {
+					SKU    string  `json:"sku"`
+					URLKey *string `json:"url_key"`
+				} `json:"product"`
+				Prices struct {
+					Price                struct{ Value float64 }  `json:"price"`
+					RowTotal             struct{ Value float64 }  `json:"row_total"`
+					RowTotalIncludingTax struct{ Value float64 }  `json:"row_total_including_tax"`
+					TotalItemDiscount    *struct{ Value float64 } `json:"total_item_discount"`
+					Discounts            []struct {
+						Amount    struct{ Value float64 } `json:"amount"`
+						AppliedTo string                  `json:"applied_to"`
+					} `json:"discounts"`
+				} `json:"prices"`
+			} `json:"items"`
+			ItemsV2 struct {
+				TotalCount int `json:"total_count"`
+				PageInfo   struct {
+					CurrentPage int `json:"current_page"`
+					TotalPages  int `json:"total_pages"`
+				} `json:"page_info"`
+			} `json:"itemsV2"`
+			Prices struct {
+				GrandTotal                       struct{ Value float64; Currency string } `json:"grand_total"`
+				SubtotalExcludingTax             struct{ Value float64 }                 `json:"subtotal_excluding_tax"`
+				SubtotalIncludingTax             struct{ Value float64 }                 `json:"subtotal_including_tax"`
+				SubtotalWithDiscountExcludingTax struct{ Value float64 }                 `json:"subtotal_with_discount_excluding_tax"`
+				AppliedTaxes                     []struct {
+					Amount struct{ Value float64 } `json:"amount"`
+					Label  string                  `json:"label"`
+				} `json:"applied_taxes"`
+				Discounts []struct {
+					Amount    struct{ Value float64 } `json:"amount"`
+					Label     string                  `json:"label"`
+					AppliedTo string                  `json:"applied_to"`
+				} `json:"discounts"`
+			} `json:"prices"`
+			AppliedCoupons []struct{ Code string } `json:"applied_coupons"`
+			ShippingAddresses []struct {
+				City    string `json:"city"`
+				Postcode string `json:"postcode"`
+				Region  struct{ Code string } `json:"region"`
+				Country struct{ Code string } `json:"country"`
+				SelectedShippingMethod struct {
+					CarrierCode  string             `json:"carrier_code"`
+					MethodCode   string             `json:"method_code"`
+					Amount       struct{ Value float64 } `json:"amount"`
+					PriceExclTax struct{ Value float64 } `json:"price_excl_tax"`
+					PriceInclTax struct{ Value float64 } `json:"price_incl_tax"`
+				} `json:"selected_shipping_method"`
+			} `json:"shipping_addresses"`
+			BillingAddress struct {
+				City    string `json:"city"`
+				Postcode string `json:"postcode"`
+				Country struct{ Code string } `json:"country"`
+			} `json:"billing_address"`
+			SelectedPaymentMethod struct{ Code string } `json:"selected_payment_method"`
+		} `json:"cart"`
+	}
+
+	var goFC, mFC finalCartRespT
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go final cart error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		// Magento may not support price_excl_tax on SelectedShippingMethod — log and continue.
+		t.Logf("Magento final cart error (may indicate schema gap): %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goFC)
+	json.Unmarshal(mResp.Data, &mFC)
+
+	goFCart := goFC.Cart
+	mFCart := mFC.Cart
+	assertEq(t, "final.email", goFCart.Email, mFCart.Email)
+	assertEq(t, "final.total_quantity", goFCart.TotalQuantity, mFCart.TotalQuantity)
+	assertEq(t, "final.is_virtual", goFCart.IsVirtual, mFCart.IsVirtual)
+	assertEq(t, "final.subtotal", goFCart.Prices.SubtotalExcludingTax.Value, mFCart.Prices.SubtotalExcludingTax.Value)
+	assertEq(t, "final.subtotal_with_discount", goFCart.Prices.SubtotalWithDiscountExcludingTax.Value, mFCart.Prices.SubtotalWithDiscountExcludingTax.Value)
+	assertEq(t, "final.grand_total", goFCart.Prices.GrandTotal.Value, mFCart.Prices.GrandTotal.Value)
+	assertEq(t, "final.coupon.code", func() string {
+		if len(goFCart.AppliedCoupons) > 0 { return goFCart.AppliedCoupons[0].Code }; return ""
+	}(), func() string {
+		if len(mFCart.AppliedCoupons) > 0 { return mFCart.AppliedCoupons[0].Code }; return ""
+	}())
+	assertEq(t, "final.payment.code", goFCart.SelectedPaymentMethod.Code, mFCart.SelectedPaymentMethod.Code)
+
+	// Compare per-item fields.
+	for i := range goFCart.Items {
+		if i >= len(mFCart.Items) { break }
+		assertEq(t, fmt.Sprintf("final.item[%d].sku", i), goFCart.Items[i].Product.SKU, mFCart.Items[i].Product.SKU)
+		assertEq(t, fmt.Sprintf("final.item[%d].qty", i), goFCart.Items[i].Quantity, mFCart.Items[i].Quantity)
+		assertEq(t, fmt.Sprintf("final.item[%d].row_total", i), goFCart.Items[i].Prices.RowTotal.Value, mFCart.Items[i].Prices.RowTotal.Value)
+		assertEq(t, fmt.Sprintf("final.item[%d].row_total_incl_tax", i), goFCart.Items[i].Prices.RowTotalIncludingTax.Value, mFCart.Items[i].Prices.RowTotalIncludingTax.Value)
+		// url_key — gap check: should be non-null for navigable products.
+		if goFCart.Items[i].Product.URLKey == nil || *goFCart.Items[i].Product.URLKey == "" {
+			t.Errorf("final.item[%d].url_key is empty — expected non-null for product %s", i, goFCart.Items[i].Product.SKU)
+		}
+	}
+
+	// itemsV2 — sanity check.
+	assertEq(t, "final.itemsV2.total_count", goFCart.ItemsV2.TotalCount, len(goFCart.Items))
+	assertEq(t, "final.itemsV2.page_info.current_page", goFCart.ItemsV2.PageInfo.CurrentPage, 1)
+
+	// Compare applied taxes.
+	assertEq(t, "final.applied_taxes.count", len(goFCart.Prices.AppliedTaxes), len(mFCart.Prices.AppliedTaxes))
+	for i := range goFCart.Prices.AppliedTaxes {
+		if i >= len(mFCart.Prices.AppliedTaxes) { break }
+		assertEq(t, fmt.Sprintf("final.tax[%d].amount", i), goFCart.Prices.AppliedTaxes[i].Amount.Value, mFCart.Prices.AppliedTaxes[i].Amount.Value)
+		assertEq(t, fmt.Sprintf("final.tax[%d].label", i), goFCart.Prices.AppliedTaxes[i].Label, mFCart.Prices.AppliedTaxes[i].Label)
+	}
+
+	t.Logf("Final cart PASS: subtotal=%.2f discount=%.2f shipping=%.2f tax=%d grand_total=%.2f",
+		goFCart.Prices.SubtotalExcludingTax.Value,
+		goFCart.Prices.SubtotalWithDiscountExcludingTax.Value,
+		goFCart.ShippingAddresses[0].SelectedShippingMethod.Amount.Value,
+		len(goFCart.Prices.AppliedTaxes),
+		goFCart.Prices.GrandTotal.Value)
+
+	// ── Step 10: Place order ──────────────────────────────────────────────────
+	placeQ := func(id string) string {
+		return fmt.Sprintf(`mutation {
+			placeOrder(input: { cart_id: "%s" }) {
+				errors { code message }
+				orderV2 { number token }
+			}
+		}`, id)
+	}
+
+	goResp = doQuery(t, placeQ(goCartID), "")
+	mResp = doMagentoQuery(t, placeQ(mCartID), "")
+
+	type placeOrderResp struct {
+		PlaceOrder struct {
+			Errors  []struct{ Code, Message string }  `json:"errors"`
+			OrderV2 *struct {
+				Number string  `json:"number"`
+				Token  *string `json:"token"`
+			} `json:"orderV2"`
+		} `json:"placeOrder"`
+	}
+
+	var goPO, mPO placeOrderResp
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go placeOrder error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento placeOrder error: %s", mResp.Errors[0].Message)
+	}
+	json.Unmarshal(goResp.Data, &goPO)
+	json.Unmarshal(mResp.Data, &mPO)
+
+	if len(goPO.PlaceOrder.Errors) > 0 {
+		t.Errorf("Go placeOrder returned structured error: %s — %s", goPO.PlaceOrder.Errors[0].Code, goPO.PlaceOrder.Errors[0].Message)
+	}
+	if len(mPO.PlaceOrder.Errors) > 0 {
+		t.Errorf("Magento placeOrder returned structured error: %s — %s", mPO.PlaceOrder.Errors[0].Code, mPO.PlaceOrder.Errors[0].Message)
+	}
+
+	goOrderNum := ""
+	if goPO.PlaceOrder.OrderV2 != nil {
+		goOrderNum = goPO.PlaceOrder.OrderV2.Number
+	}
+	mOrderNum := ""
+	if mPO.PlaceOrder.OrderV2 != nil {
+		mOrderNum = mPO.PlaceOrder.OrderV2.Number
+	}
+	if len(goOrderNum) != 9 {
+		t.Errorf("Go order number not 9 digits: %q", goOrderNum)
+	}
+	if len(mOrderNum) != 9 {
+		t.Errorf("Magento order number not 9 digits: %q", mOrderNum)
+	}
+	// token is our extension — not in Magento's response; just verify it's present on Go side.
+	if goPO.PlaceOrder.OrderV2 != nil && (goPO.PlaceOrder.OrderV2.Token == nil || len(*goPO.PlaceOrder.OrderV2.Token) != 32) {
+		t.Errorf("Go placeOrder.orderV2.token should be 32-char hex, got: %v", goPO.PlaceOrder.OrderV2.Token)
+	}
+
+	t.Logf("Step 10 PASS: placeOrder — Go=#%s Magento=#%s", goOrderNum, mOrderNum)
+}
+
 // ─── Assertion Helpers ──────────────────────────────────────────────────────
 
 func assertEq(t *testing.T, field string, goVal, magentoVal any) {
