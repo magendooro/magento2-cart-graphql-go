@@ -1842,6 +1842,57 @@ func TestEstimateTotals_CartNotModified(t *testing.T) {
 		totals.GrandTotal.Value, totals.Subtotal.Value, totals.Shipping.Value, totals.Tax.Value)
 }
 
+func TestCustomizableOptionsEmpty(t *testing.T) {
+	// Verifies that customizable_options is returned (as an empty array) for a
+	// product that has no custom options configured. Full select/text option
+	// coverage requires a product with catalog_product_option rows.
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-MB01", 1)
+
+	query := fmt.Sprintf(`{
+		cart(cart_id:"%s") {
+			items {
+				... on SimpleCartItem {
+					customizable_options {
+						id
+						label
+						type
+						is_required
+						sort_order
+						values { id label value }
+					}
+				}
+			}
+		}
+	}`, cartID)
+
+	var out struct {
+		Cart struct {
+			Items []struct {
+				CustomizableOptions []struct {
+					ID    int    `json:"id"`
+					Label string `json:"label"`
+					Type  string `json:"type"`
+				} `json:"customizable_options"`
+			} `json:"items"`
+		} `json:"cart"`
+	}
+	resp := doQuery(t, query, "")
+	if err := json.Unmarshal(resp.Data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Cart.Items) != 1 {
+		t.Fatalf("expected 1 item got %d", len(out.Cart.Items))
+	}
+	if out.Cart.Items[0].CustomizableOptions == nil {
+		t.Error("customizable_options should not be null (should be empty array)")
+	}
+	if len(out.Cart.Items[0].CustomizableOptions) != 0 {
+		t.Errorf("expected 0 custom options for plain product, got %d", len(out.Cart.Items[0].CustomizableOptions))
+	}
+	t.Log("PASS: customizable_options present and empty for product without custom options")
+}
+
 func TestItemsV2(t *testing.T) {
 	const sku = "24-MB01"
 	cartID := createTestCart(t)

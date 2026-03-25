@@ -108,12 +108,13 @@ type BillingCartAddress struct {
 }
 
 type BundleCartItem struct {
-	UID           string                  `json:"uid"`
-	Quantity      float64                 `json:"quantity"`
-	Prices        *CartItemPrices         `json:"prices,omitempty"`
-	Product       *CartItemProduct        `json:"product"`
-	Errors        []*CartItemError        `json:"errors,omitempty"`
-	BundleOptions []*SelectedBundleOption `json:"bundle_options"`
+	UID                 string                        `json:"uid"`
+	Quantity            float64                       `json:"quantity"`
+	Prices              *CartItemPrices               `json:"prices,omitempty"`
+	Product             *CartItemProduct              `json:"product"`
+	Errors              []*CartItemError              `json:"errors,omitempty"`
+	BundleOptions       []*SelectedBundleOption       `json:"bundle_options"`
+	CustomizableOptions []*SelectedCustomizableOption `json:"customizable_options"`
 }
 
 func (BundleCartItem) IsCartItemInterface()              {}
@@ -216,6 +217,12 @@ type CartItemProductImage struct {
 	Label *string `json:"label,omitempty"`
 }
 
+type CartItemSelectedOptionValuePrice struct {
+	Type  PriceTypeEnum `json:"type"`
+	Units string        `json:"units"`
+	Value float64       `json:"value"`
+}
+
 type CartItemUpdateInput struct {
 	CartItemUID string  `json:"cart_item_uid"`
 	Quantity    float64 `json:"quantity"`
@@ -260,6 +267,7 @@ type ConfigurableCartItem struct {
 	Errors              []*CartItemError              `json:"errors,omitempty"`
 	ConfigurableOptions []*SelectedConfigurableOption `json:"configurable_options"`
 	ConfiguredVariant   *CartItemProduct              `json:"configured_variant,omitempty"`
+	CustomizableOptions []*SelectedCustomizableOption `json:"customizable_options"`
 }
 
 func (ConfigurableCartItem) IsCartItemInterface()              {}
@@ -418,6 +426,24 @@ type SelectedConfigurableOption struct {
 	ValueLabel  string `json:"value_label"`
 }
 
+type SelectedCustomizableOption struct {
+	CustomizableOptionUID string                             `json:"customizable_option_uid"`
+	ID                    int                                `json:"id"`
+	IsRequired            bool                               `json:"is_required"`
+	Label                 string                             `json:"label"`
+	SortOrder             int                                `json:"sort_order"`
+	Type                  string                             `json:"type"`
+	Values                []*SelectedCustomizableOptionValue `json:"values"`
+}
+
+type SelectedCustomizableOptionValue struct {
+	CustomizableOptionValueUID string                            `json:"customizable_option_value_uid"`
+	ID                         int                               `json:"id"`
+	Label                      string                            `json:"label"`
+	Price                      *CartItemSelectedOptionValuePrice `json:"price"`
+	Value                      string                            `json:"value"`
+}
+
 type SelectedPaymentMethod struct {
 	Code  string  `json:"code"`
 	Title *string `json:"title,omitempty"`
@@ -503,11 +529,12 @@ type ShippingMethodInput struct {
 }
 
 type SimpleCartItem struct {
-	UID      string           `json:"uid"`
-	Quantity float64          `json:"quantity"`
-	Prices   *CartItemPrices  `json:"prices,omitempty"`
-	Product  *CartItemProduct `json:"product"`
-	Errors   []*CartItemError `json:"errors,omitempty"`
+	UID                 string                        `json:"uid"`
+	Quantity            float64                       `json:"quantity"`
+	Prices              *CartItemPrices               `json:"prices,omitempty"`
+	Product             *CartItemProduct              `json:"product"`
+	Errors              []*CartItemError              `json:"errors,omitempty"`
+	CustomizableOptions []*SelectedCustomizableOption `json:"customizable_options"`
 }
 
 func (SimpleCartItem) IsCartItemInterface()              {}
@@ -978,6 +1005,63 @@ func (e *PlaceOrderErrorCodes) UnmarshalJSON(b []byte) error {
 }
 
 func (e PlaceOrderErrorCodes) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type PriceTypeEnum string
+
+const (
+	PriceTypeEnumFixed   PriceTypeEnum = "FIXED"
+	PriceTypeEnumPercent PriceTypeEnum = "PERCENT"
+	PriceTypeEnumDynamic PriceTypeEnum = "DYNAMIC"
+)
+
+var AllPriceTypeEnum = []PriceTypeEnum{
+	PriceTypeEnumFixed,
+	PriceTypeEnumPercent,
+	PriceTypeEnumDynamic,
+}
+
+func (e PriceTypeEnum) IsValid() bool {
+	switch e {
+	case PriceTypeEnumFixed, PriceTypeEnumPercent, PriceTypeEnumDynamic:
+		return true
+	}
+	return false
+}
+
+func (e PriceTypeEnum) String() string {
+	return string(e)
+}
+
+func (e *PriceTypeEnum) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = PriceTypeEnum(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid PriceTypeEnum", str)
+	}
+	return nil
+}
+
+func (e PriceTypeEnum) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *PriceTypeEnum) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e PriceTypeEnum) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

@@ -96,12 +96,13 @@ type ComplexityRoot struct {
 	}
 
 	BundleCartItem struct {
-		BundleOptions func(childComplexity int) int
-		Errors        func(childComplexity int) int
-		Prices        func(childComplexity int) int
-		Product       func(childComplexity int) int
-		Quantity      func(childComplexity int) int
-		UID           func(childComplexity int) int
+		BundleOptions       func(childComplexity int) int
+		CustomizableOptions func(childComplexity int) int
+		Errors              func(childComplexity int) int
+		Prices              func(childComplexity int) int
+		Product             func(childComplexity int) int
+		Quantity            func(childComplexity int) int
+		UID                 func(childComplexity int) int
 	}
 
 	Cart struct {
@@ -155,6 +156,12 @@ type ComplexityRoot struct {
 		URL   func(childComplexity int) int
 	}
 
+	CartItemSelectedOptionValuePrice struct {
+		Type  func(childComplexity int) int
+		Units func(childComplexity int) int
+		Value func(childComplexity int) int
+	}
+
 	CartItems struct {
 		Items      func(childComplexity int) int
 		PageInfo   func(childComplexity int) int
@@ -189,6 +196,7 @@ type ComplexityRoot struct {
 	ConfigurableCartItem struct {
 		ConfigurableOptions func(childComplexity int) int
 		ConfiguredVariant   func(childComplexity int) int
+		CustomizableOptions func(childComplexity int) int
 		Errors              func(childComplexity int) int
 		Prices              func(childComplexity int) int
 		Product             func(childComplexity int) int
@@ -304,6 +312,24 @@ type ComplexityRoot struct {
 		ValueLabel  func(childComplexity int) int
 	}
 
+	SelectedCustomizableOption struct {
+		CustomizableOptionUID func(childComplexity int) int
+		ID                    func(childComplexity int) int
+		IsRequired            func(childComplexity int) int
+		Label                 func(childComplexity int) int
+		SortOrder             func(childComplexity int) int
+		Type                  func(childComplexity int) int
+		Values                func(childComplexity int) int
+	}
+
+	SelectedCustomizableOptionValue struct {
+		CustomizableOptionValueUID func(childComplexity int) int
+		ID                         func(childComplexity int) int
+		Label                      func(childComplexity int) int
+		Price                      func(childComplexity int) int
+		Value                      func(childComplexity int) int
+	}
+
 	SelectedPaymentMethod struct {
 		Code  func(childComplexity int) int
 		Title func(childComplexity int) int
@@ -354,11 +380,12 @@ type ComplexityRoot struct {
 	}
 
 	SimpleCartItem struct {
-		Errors   func(childComplexity int) int
-		Prices   func(childComplexity int) int
-		Product  func(childComplexity int) int
-		Quantity func(childComplexity int) int
-		UID      func(childComplexity int) int
+		CustomizableOptions func(childComplexity int) int
+		Errors              func(childComplexity int) int
+		Prices              func(childComplexity int) int
+		Product             func(childComplexity int) int
+		Quantity            func(childComplexity int) int
+		UID                 func(childComplexity int) int
 	}
 
 	UpdateCartItemsOutput struct {
@@ -596,6 +623,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BundleCartItem.BundleOptions(childComplexity), true
+	case "BundleCartItem.customizable_options":
+		if e.ComplexityRoot.BundleCartItem.CustomizableOptions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BundleCartItem.CustomizableOptions(childComplexity), true
 	case "BundleCartItem.errors":
 		if e.ComplexityRoot.BundleCartItem.Errors == nil {
 			break
@@ -819,6 +852,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CartItemProductImage.URL(childComplexity), true
 
+	case "CartItemSelectedOptionValuePrice.type":
+		if e.ComplexityRoot.CartItemSelectedOptionValuePrice.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItemSelectedOptionValuePrice.Type(childComplexity), true
+	case "CartItemSelectedOptionValuePrice.units":
+		if e.ComplexityRoot.CartItemSelectedOptionValuePrice.Units == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItemSelectedOptionValuePrice.Units(childComplexity), true
+	case "CartItemSelectedOptionValuePrice.value":
+		if e.ComplexityRoot.CartItemSelectedOptionValuePrice.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CartItemSelectedOptionValuePrice.Value(childComplexity), true
+
 	case "CartItems.items":
 		if e.ComplexityRoot.CartItems.Items == nil {
 			break
@@ -932,6 +984,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ConfigurableCartItem.ConfiguredVariant(childComplexity), true
+	case "ConfigurableCartItem.customizable_options":
+		if e.ComplexityRoot.ConfigurableCartItem.CustomizableOptions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.CustomizableOptions(childComplexity), true
 	case "ConfigurableCartItem.errors":
 		if e.ComplexityRoot.ConfigurableCartItem.Errors == nil {
 			break
@@ -1454,6 +1512,80 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.SelectedConfigurableOption.ValueLabel(childComplexity), true
 
+	case "SelectedCustomizableOption.customizable_option_uid":
+		if e.ComplexityRoot.SelectedCustomizableOption.CustomizableOptionUID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.CustomizableOptionUID(childComplexity), true
+	case "SelectedCustomizableOption.id":
+		if e.ComplexityRoot.SelectedCustomizableOption.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.ID(childComplexity), true
+	case "SelectedCustomizableOption.is_required":
+		if e.ComplexityRoot.SelectedCustomizableOption.IsRequired == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.IsRequired(childComplexity), true
+	case "SelectedCustomizableOption.label":
+		if e.ComplexityRoot.SelectedCustomizableOption.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.Label(childComplexity), true
+	case "SelectedCustomizableOption.sort_order":
+		if e.ComplexityRoot.SelectedCustomizableOption.SortOrder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.SortOrder(childComplexity), true
+	case "SelectedCustomizableOption.type":
+		if e.ComplexityRoot.SelectedCustomizableOption.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.Type(childComplexity), true
+	case "SelectedCustomizableOption.values":
+		if e.ComplexityRoot.SelectedCustomizableOption.Values == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOption.Values(childComplexity), true
+
+	case "SelectedCustomizableOptionValue.customizable_option_value_uid":
+		if e.ComplexityRoot.SelectedCustomizableOptionValue.CustomizableOptionValueUID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOptionValue.CustomizableOptionValueUID(childComplexity), true
+	case "SelectedCustomizableOptionValue.id":
+		if e.ComplexityRoot.SelectedCustomizableOptionValue.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOptionValue.ID(childComplexity), true
+	case "SelectedCustomizableOptionValue.label":
+		if e.ComplexityRoot.SelectedCustomizableOptionValue.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOptionValue.Label(childComplexity), true
+	case "SelectedCustomizableOptionValue.price":
+		if e.ComplexityRoot.SelectedCustomizableOptionValue.Price == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOptionValue.Price(childComplexity), true
+	case "SelectedCustomizableOptionValue.value":
+		if e.ComplexityRoot.SelectedCustomizableOptionValue.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedCustomizableOptionValue.Value(childComplexity), true
+
 	case "SelectedPaymentMethod.code":
 		if e.ComplexityRoot.SelectedPaymentMethod.Code == nil {
 			break
@@ -1612,6 +1744,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ShippingCartAddress.Telephone(childComplexity), true
 
+	case "SimpleCartItem.customizable_options":
+		if e.ComplexityRoot.SimpleCartItem.CustomizableOptions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SimpleCartItem.CustomizableOptions(childComplexity), true
 	case "SimpleCartItem.errors":
 		if e.ComplexityRoot.SimpleCartItem.Errors == nil {
 			break
@@ -3345,6 +3483,51 @@ func (ec *executionContext) fieldContext_BundleCartItem_bundle_options(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _BundleCartItem_customizable_options(ctx context.Context, field graphql.CollectedField, obj *model.BundleCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BundleCartItem_customizable_options,
+		func(ctx context.Context) (any, error) {
+			return obj.CustomizableOptions, nil
+		},
+		nil,
+		ec.marshalNSelectedCustomizableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BundleCartItem_customizable_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BundleCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "customizable_option_uid":
+				return ec.fieldContext_SelectedCustomizableOption_customizable_option_uid(ctx, field)
+			case "id":
+				return ec.fieldContext_SelectedCustomizableOption_id(ctx, field)
+			case "is_required":
+				return ec.fieldContext_SelectedCustomizableOption_is_required(ctx, field)
+			case "label":
+				return ec.fieldContext_SelectedCustomizableOption_label(ctx, field)
+			case "sort_order":
+				return ec.fieldContext_SelectedCustomizableOption_sort_order(ctx, field)
+			case "type":
+				return ec.fieldContext_SelectedCustomizableOption_type(ctx, field)
+			case "values":
+				return ec.fieldContext_SelectedCustomizableOption_values(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SelectedCustomizableOption", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Cart_id(ctx context.Context, field graphql.CollectedField, obj *model.Cart) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4347,6 +4530,93 @@ func (ec *executionContext) fieldContext_CartItemProductImage_label(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _CartItemSelectedOptionValuePrice_type(ctx context.Context, field graphql.CollectedField, obj *model.CartItemSelectedOptionValuePrice) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItemSelectedOptionValuePrice_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNPriceTypeEnum2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPriceTypeEnum,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItemSelectedOptionValuePrice_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItemSelectedOptionValuePrice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type PriceTypeEnum does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItemSelectedOptionValuePrice_units(ctx context.Context, field graphql.CollectedField, obj *model.CartItemSelectedOptionValuePrice) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItemSelectedOptionValuePrice_units,
+		func(ctx context.Context) (any, error) {
+			return obj.Units, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItemSelectedOptionValuePrice_units(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItemSelectedOptionValuePrice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItemSelectedOptionValuePrice_value(ctx context.Context, field graphql.CollectedField, obj *model.CartItemSelectedOptionValuePrice) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CartItemSelectedOptionValuePrice_value,
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CartItemSelectedOptionValuePrice_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItemSelectedOptionValuePrice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CartItems_items(ctx context.Context, field graphql.CollectedField, obj *model.CartItems) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5109,6 +5379,51 @@ func (ec *executionContext) fieldContext_ConfigurableCartItem_configured_variant
 				return ec.fieldContext_CartItemProduct_thumbnail(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CartItemProduct", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_customizable_options(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_customizable_options,
+		func(ctx context.Context) (any, error) {
+			return obj.CustomizableOptions, nil
+		},
+		nil,
+		ec.marshalNSelectedCustomizableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_customizable_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "customizable_option_uid":
+				return ec.fieldContext_SelectedCustomizableOption_customizable_option_uid(ctx, field)
+			case "id":
+				return ec.fieldContext_SelectedCustomizableOption_id(ctx, field)
+			case "is_required":
+				return ec.fieldContext_SelectedCustomizableOption_is_required(ctx, field)
+			case "label":
+				return ec.fieldContext_SelectedCustomizableOption_label(ctx, field)
+			case "sort_order":
+				return ec.fieldContext_SelectedCustomizableOption_sort_order(ctx, field)
+			case "type":
+				return ec.fieldContext_SelectedCustomizableOption_type(ctx, field)
+			case "values":
+				return ec.fieldContext_SelectedCustomizableOption_values(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SelectedCustomizableOption", field.Name)
 		},
 	}
 	return fc, nil
@@ -7618,6 +7933,374 @@ func (ec *executionContext) fieldContext_SelectedConfigurableOption_value_label(
 	return fc, nil
 }
 
+func (ec *executionContext) _SelectedCustomizableOption_customizable_option_uid(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_customizable_option_uid,
+		func(ctx context.Context) (any, error) {
+			return obj.CustomizableOptionUID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_customizable_option_uid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_id(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_is_required(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_is_required,
+		func(ctx context.Context) (any, error) {
+			return obj.IsRequired, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_is_required(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_label(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_sort_order(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_sort_order,
+		func(ctx context.Context) (any, error) {
+			return obj.SortOrder, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_sort_order(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_type(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOption_values(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOption_values,
+		func(ctx context.Context) (any, error) {
+			return obj.Values, nil
+		},
+		nil,
+		ec.marshalNSelectedCustomizableOptionValue2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionValueᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOption_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "customizable_option_value_uid":
+				return ec.fieldContext_SelectedCustomizableOptionValue_customizable_option_value_uid(ctx, field)
+			case "id":
+				return ec.fieldContext_SelectedCustomizableOptionValue_id(ctx, field)
+			case "label":
+				return ec.fieldContext_SelectedCustomizableOptionValue_label(ctx, field)
+			case "price":
+				return ec.fieldContext_SelectedCustomizableOptionValue_price(ctx, field)
+			case "value":
+				return ec.fieldContext_SelectedCustomizableOptionValue_value(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SelectedCustomizableOptionValue", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue_customizable_option_value_uid(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOptionValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOptionValue_customizable_option_value_uid,
+		func(ctx context.Context) (any, error) {
+			return obj.CustomizableOptionValueUID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOptionValue_customizable_option_value_uid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOptionValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue_id(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOptionValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOptionValue_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOptionValue_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOptionValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue_label(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOptionValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOptionValue_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOptionValue_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOptionValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue_price(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOptionValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOptionValue_price,
+		func(ctx context.Context) (any, error) {
+			return obj.Price, nil
+		},
+		nil,
+		ec.marshalNCartItemSelectedOptionValuePrice2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemSelectedOptionValuePrice,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOptionValue_price(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOptionValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_CartItemSelectedOptionValuePrice_type(ctx, field)
+			case "units":
+				return ec.fieldContext_CartItemSelectedOptionValuePrice_units(ctx, field)
+			case "value":
+				return ec.fieldContext_CartItemSelectedOptionValuePrice_value(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItemSelectedOptionValuePrice", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue_value(ctx context.Context, field graphql.CollectedField, obj *model.SelectedCustomizableOptionValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedCustomizableOptionValue_value,
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedCustomizableOptionValue_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedCustomizableOptionValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _SelectedPaymentMethod_code(ctx context.Context, field graphql.CollectedField, obj *model.SelectedPaymentMethod) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -8709,6 +9392,51 @@ func (ec *executionContext) fieldContext_SimpleCartItem_errors(_ context.Context
 				return ec.fieldContext_CartItemError_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CartItemError", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SimpleCartItem_customizable_options(ctx context.Context, field graphql.CollectedField, obj *model.SimpleCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SimpleCartItem_customizable_options,
+		func(ctx context.Context) (any, error) {
+			return obj.CustomizableOptions, nil
+		},
+		nil,
+		ec.marshalNSelectedCustomizableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SimpleCartItem_customizable_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SimpleCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "customizable_option_uid":
+				return ec.fieldContext_SelectedCustomizableOption_customizable_option_uid(ctx, field)
+			case "id":
+				return ec.fieldContext_SelectedCustomizableOption_id(ctx, field)
+			case "is_required":
+				return ec.fieldContext_SelectedCustomizableOption_is_required(ctx, field)
+			case "label":
+				return ec.fieldContext_SelectedCustomizableOption_label(ctx, field)
+			case "sort_order":
+				return ec.fieldContext_SelectedCustomizableOption_sort_order(ctx, field)
+			case "type":
+				return ec.fieldContext_SelectedCustomizableOption_type(ctx, field)
+			case "values":
+				return ec.fieldContext_SelectedCustomizableOption_values(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SelectedCustomizableOption", field.Name)
 		},
 	}
 	return fc, nil
@@ -12076,6 +12804,11 @@ func (ec *executionContext) _BundleCartItem(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "customizable_options":
+			out.Values[i] = ec._BundleCartItem_customizable_options(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12464,6 +13197,55 @@ func (ec *executionContext) _CartItemProductImage(ctx context.Context, sel ast.S
 	return out
 }
 
+var cartItemSelectedOptionValuePriceImplementors = []string{"CartItemSelectedOptionValuePrice"}
+
+func (ec *executionContext) _CartItemSelectedOptionValuePrice(ctx context.Context, sel ast.SelectionSet, obj *model.CartItemSelectedOptionValuePrice) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cartItemSelectedOptionValuePriceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CartItemSelectedOptionValuePrice")
+		case "type":
+			out.Values[i] = ec._CartItemSelectedOptionValuePrice_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "units":
+			out.Values[i] = ec._CartItemSelectedOptionValuePrice_units(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._CartItemSelectedOptionValuePrice_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var cartItemsImplementors = []string{"CartItems"}
 
 func (ec *executionContext) _CartItems(ctx context.Context, sel ast.SelectionSet, obj *model.CartItems) graphql.Marshaler {
@@ -12733,6 +13515,11 @@ func (ec *executionContext) _ConfigurableCartItem(ctx context.Context, sel ast.S
 			}
 		case "configured_variant":
 			out.Values[i] = ec._ConfigurableCartItem_configured_variant(ctx, field, obj)
+		case "customizable_options":
+			out.Values[i] = ec._ConfigurableCartItem_customizable_options(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -13603,6 +14390,134 @@ func (ec *executionContext) _SelectedConfigurableOption(ctx context.Context, sel
 	return out
 }
 
+var selectedCustomizableOptionImplementors = []string{"SelectedCustomizableOption"}
+
+func (ec *executionContext) _SelectedCustomizableOption(ctx context.Context, sel ast.SelectionSet, obj *model.SelectedCustomizableOption) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, selectedCustomizableOptionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SelectedCustomizableOption")
+		case "customizable_option_uid":
+			out.Values[i] = ec._SelectedCustomizableOption_customizable_option_uid(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._SelectedCustomizableOption_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "is_required":
+			out.Values[i] = ec._SelectedCustomizableOption_is_required(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._SelectedCustomizableOption_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sort_order":
+			out.Values[i] = ec._SelectedCustomizableOption_sort_order(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._SelectedCustomizableOption_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "values":
+			out.Values[i] = ec._SelectedCustomizableOption_values(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var selectedCustomizableOptionValueImplementors = []string{"SelectedCustomizableOptionValue"}
+
+func (ec *executionContext) _SelectedCustomizableOptionValue(ctx context.Context, sel ast.SelectionSet, obj *model.SelectedCustomizableOptionValue) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, selectedCustomizableOptionValueImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SelectedCustomizableOptionValue")
+		case "customizable_option_value_uid":
+			out.Values[i] = ec._SelectedCustomizableOptionValue_customizable_option_value_uid(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._SelectedCustomizableOptionValue_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._SelectedCustomizableOptionValue_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "price":
+			out.Values[i] = ec._SelectedCustomizableOptionValue_price(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._SelectedCustomizableOptionValue_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var selectedPaymentMethodImplementors = []string{"SelectedPaymentMethod"}
 
 func (ec *executionContext) _SelectedPaymentMethod(ctx context.Context, sel ast.SelectionSet, obj *model.SelectedPaymentMethod) graphql.Marshaler {
@@ -14009,6 +14924,11 @@ func (ec *executionContext) _SimpleCartItem(ctx context.Context, sel ast.Selecti
 			}
 		case "errors":
 			out.Values[i] = ec._SimpleCartItem_errors(ctx, field, obj)
+		case "customizable_options":
+			out.Values[i] = ec._SimpleCartItem_customizable_options(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -14557,6 +15477,16 @@ func (ec *executionContext) marshalNCartItemProduct2ᚖgithubᚗcomᚋmagendooro
 	return ec._CartItemProduct(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNCartItemSelectedOptionValuePrice2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemSelectedOptionValuePrice(ctx context.Context, sel ast.SelectionSet, v *model.CartItemSelectedOptionValuePrice) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CartItemSelectedOptionValuePrice(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCartItemUpdateInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemUpdateInputᚄ(ctx context.Context, v any) ([]*model.CartItemUpdateInput, error) {
 	var vSlice []any
 	vSlice = graphql.CoerceList(v)
@@ -14788,6 +15718,16 @@ func (ec *executionContext) marshalNPlaceOrderErrorCodes2githubᚗcomᚋmagendoo
 	return v
 }
 
+func (ec *executionContext) unmarshalNPriceTypeEnum2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPriceTypeEnum(ctx context.Context, v any) (model.PriceTypeEnum, error) {
+	var res model.PriceTypeEnum
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPriceTypeEnum2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPriceTypeEnum(ctx context.Context, sel ast.SelectionSet, v model.PriceTypeEnum) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNReorderItemsOutput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐReorderItemsOutput(ctx context.Context, sel ast.SelectionSet, v model.ReorderItemsOutput) graphql.Marshaler {
 	return ec._ReorderItemsOutput(ctx, sel, &v)
 }
@@ -14888,6 +15828,58 @@ func (ec *executionContext) marshalNSelectedConfigurableOption2ᚖgithubᚗcom�
 		return graphql.Null
 	}
 	return ec._SelectedConfigurableOption(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNSelectedCustomizableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedCustomizableOption) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSelectedCustomizableOption2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOption(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSelectedCustomizableOption2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOption(ctx context.Context, sel ast.SelectionSet, v *model.SelectedCustomizableOption) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SelectedCustomizableOption(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNSelectedCustomizableOptionValue2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionValueᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedCustomizableOptionValue) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSelectedCustomizableOptionValue2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionValue(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSelectedCustomizableOptionValue2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedCustomizableOptionValue(ctx context.Context, sel ast.SelectionSet, v *model.SelectedCustomizableOptionValue) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SelectedCustomizableOptionValue(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNShippingAddressInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐShippingAddressInputᚄ(ctx context.Context, v any) ([]*model.ShippingAddressInput, error) {

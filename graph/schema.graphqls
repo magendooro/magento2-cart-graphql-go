@@ -108,6 +108,7 @@ type SimpleCartItem implements CartItemInterface {
     prices: CartItemPrices
     product: CartItemProduct!
     errors: [CartItemError]
+    customizable_options: [SelectedCustomizableOption!]!
 }
 
 type ConfigurableCartItem implements CartItemInterface {
@@ -118,6 +119,7 @@ type ConfigurableCartItem implements CartItemInterface {
     errors: [CartItemError]
     configurable_options: [SelectedConfigurableOption!]!
     configured_variant: CartItemProduct
+    customizable_options: [SelectedCustomizableOption!]!
 }
 
 type SelectedConfigurableOption {
@@ -134,6 +136,37 @@ type BundleCartItem implements CartItemInterface {
     product: CartItemProduct!
     errors: [CartItemError]
     bundle_options: [SelectedBundleOption!]!
+    customizable_options: [SelectedCustomizableOption!]!
+}
+
+type SelectedCustomizableOption {
+    customizable_option_uid: ID!
+    id: Int!
+    is_required: Boolean!
+    label: String!
+    sort_order: Int!
+    type: String!
+    values: [SelectedCustomizableOptionValue!]!
+}
+
+type SelectedCustomizableOptionValue {
+    customizable_option_value_uid: ID!
+    id: Int!
+    label: String!
+    price: CartItemSelectedOptionValuePrice!
+    value: String!
+}
+
+type CartItemSelectedOptionValuePrice {
+    type: PriceTypeEnum!
+    units: String!
+    value: Float!
+}
+
+enum PriceTypeEnum {
+    FIXED
+    PERCENT
+    DYNAMIC
 }
 
 type SelectedBundleOption {
