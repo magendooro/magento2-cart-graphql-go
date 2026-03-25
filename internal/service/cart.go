@@ -262,9 +262,17 @@ func (s *CartService) RemoveItem(ctx context.Context, maskedID string, itemUID s
 // ── Address operations ────────────────────────────────────────────────────────
 
 func (s *CartService) SetShippingAddresses(ctx context.Context, maskedID string, addresses []*model.ShippingAddressInput) (*model.Cart, error) {
+	if len(addresses) > 1 {
+		return nil, carterr.ErrMultipleShippingAddresses
+	}
+
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
 		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return nil, err
 	}
 
 	for _, addr := range addresses {
@@ -370,9 +378,17 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 // ── Shipping / payment ────────────────────────────────────────────────────────
 
 func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, methods []*model.ShippingMethodInput) (*model.Cart, error) {
+	if len(methods) > 1 {
+		return nil, carterr.ErrMultipleShippingMethods
+	}
+
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
 		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return nil, err
 	}
 
 	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
@@ -438,10 +454,26 @@ func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, met
 }
 
 func (s *CartService) SetGuestEmail(ctx context.Context, maskedID, email string) (*model.Cart, error) {
+	// Reject logged-in customers — matches Magento SetGuestEmailOnCart resolver
+	if middleware.GetCustomerID(ctx) != 0 {
+		return nil, carterr.ErrGuestEmailNotAllowed
+	}
+
+	// Validate email format
+	if !isValidEmail(email) {
+		return nil, carterr.ErrGuestEmailInvalid
+	}
+
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
+
+	// Check guest checkout allowance
+	if err := s.checkGuestCheckoutAllowance(ctx, quoteID); err != nil {
+		return nil, err
+	}
+
 	s.cartRepo.UpdateEmail(ctx, quoteID, email)
 	return s.GetCart(ctx, maskedID)
 }
@@ -1389,6 +1421,40 @@ func jsonMarshalAttrs(superAttributes map[int]int) (string, error) {
 	}
 	b, err := json.Marshal(m)
 	return string(b), err
+}
+
+// checkGuestCheckoutAllowance mirrors Magento's CheckCartCheckoutAllowance.
+// Returns an error if the cart is a guest cart AND guest checkout is disabled.
+func (s *CartService) checkGuestCheckoutAllowance(ctx context.Context, quoteID int) error {
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil // can't determine; let it pass
+	}
+	// Only guest carts need the check
+	if cart.CustomerID != nil && *cart.CustomerID > 0 {
+		return nil
+	}
+	storeID := middleware.GetStoreID(ctx)
+	// Default is 1 (enabled) — only reject if explicitly disabled
+	if s.cp.GetInt("checkout/options/guest_checkout", storeID, 1) == 0 {
+		return carterr.ErrGuestCheckoutNotAllowed
+	}
+	return nil
+}
+
+// isValidEmail performs basic RFC 5322-style email validation.
+func isValidEmail(email string) bool {
+	at := strings.Index(email, "@")
+	if at < 1 {
+		return false
+	}
+	local := email[:at]
+	domain := email[at+1:]
+	if len(local) == 0 || len(domain) < 3 {
+		return false
+	}
+	dot := strings.LastIndex(domain, ".")
+	return dot > 0 && dot < len(domain)-1
 }
 
 // buildBuyRequestJSON builds the info_buyRequest JSON for a configurable item.

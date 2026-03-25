@@ -46,7 +46,18 @@ var (
 )
 
 // Guest errors
-var ErrGuestEmailMissing = fmt.Errorf("Guest email for cart is missing.")
+var (
+	ErrGuestEmailMissing        = fmt.Errorf("Guest email for cart is missing.")
+	ErrGuestEmailInvalid        = fmt.Errorf("Invalid email format")
+	ErrGuestEmailNotAllowed     = fmt.Errorf("The request is not allowed for logged in customers")
+	ErrGuestCheckoutNotAllowed  = fmt.Errorf("Guest checkout is not allowed. Register a customer account or login with existing one.")
+)
+
+// Multiple address / method errors
+var (
+	ErrMultipleShippingAddresses = fmt.Errorf("You cannot specify multiple shipping addresses.")
+	ErrMultipleShippingMethods   = fmt.Errorf("You cannot specify multiple shipping methods.")
+)
 
 // Order errors
 var ErrPlaceOrderFailed = fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
