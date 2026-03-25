@@ -14,6 +14,7 @@ import (
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 	"github.com/magendooro/magento2-go-common/config"
 	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
+	"github.com/magendooro/magento2-go-common/mgerrors"
 	cartmapper "github.com/magendooro/magento2-cart-graphql-go/internal/mapper"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/ctxkeys"
 	"github.com/magendooro/magento2-go-common/middleware"
@@ -128,7 +129,7 @@ func (s *CartService) GetCart(ctx context.Context, maskedID string) (*model.Cart
 func (s *CartService) GetCustomerCart(ctx context.Context) (*model.Cart, error) {
 	customerID := middleware.GetCustomerID(ctx)
 	if customerID == 0 {
-		return nil, carterr.ErrUnauthorized
+		return nil, mgerrors.ErrUnauthorized
 	}
 
 	storeID := middleware.GetStoreID(ctx)
@@ -570,7 +571,7 @@ func (s *CartService) RemoveCoupon(ctx context.Context, maskedID string) (*model
 func (s *CartService) MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error) {
 	customerID := middleware.GetCustomerID(ctx)
 	if customerID == 0 {
-		return nil, carterr.ErrUnauthorized
+		return nil, mgerrors.ErrUnauthorized
 	}
 
 	sourceQuoteID, err := s.maskRepo.Resolve(ctx, sourceCartID)
@@ -620,7 +621,7 @@ func (s *CartService) MergeCarts(ctx context.Context, sourceCartID string, desti
 func (s *CartService) AssignCustomerToGuestCart(ctx context.Context, guestCartID string) (*model.Cart, error) {
 	customerID := middleware.GetCustomerID(ctx)
 	if customerID == 0 {
-		return nil, carterr.ErrUnauthorized
+		return nil, mgerrors.ErrUnauthorized
 	}
 
 	guestQuoteID, err := s.maskRepo.Resolve(ctx, guestCartID)

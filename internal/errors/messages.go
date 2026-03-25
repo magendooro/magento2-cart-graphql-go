@@ -15,9 +15,6 @@ var (
 	}
 )
 
-// Auth errors
-var ErrUnauthorized = fmt.Errorf("The current customer isn't authorized.")
-
 // Product errors
 var (
 	ErrProductNotFound = func(sku string) error {
