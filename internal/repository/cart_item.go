@@ -160,6 +160,16 @@ func (r *CartItemRepository) Remove(ctx context.Context, itemID int) error {
 	return err
 }
 
+// UpdatePrice sets a new unit price on an item and recalculates row_total.
+func (r *CartItemRepository) UpdatePrice(ctx context.Context, itemID int, price, qty float64) error {
+	rowTotal := price * qty
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE quote_item SET price = ?, base_price = ?, row_total = ?, base_row_total = ?, updated_at = NOW() WHERE item_id = ?",
+		price, price, rowTotal, rowTotal, itemID,
+	)
+	return err
+}
+
 // GetItemQuoteID returns the quote_id for a given item_id (for auth validation).
 func (r *CartItemRepository) GetItemQuoteID(ctx context.Context, itemID int) (int, error) {
 	var quoteID int

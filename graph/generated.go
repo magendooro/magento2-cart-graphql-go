@@ -218,6 +218,11 @@ type ComplexityRoot struct {
 		Cart func(childComplexity int) int
 	}
 
+	CreateStripeCheckoutSessionOutput struct {
+		CheckoutURL func(childComplexity int) int
+		SessionID   func(childComplexity int) int
+	}
+
 	Discount struct {
 		Amount    func(childComplexity int) int
 		AppliedTo func(childComplexity int) int
@@ -247,6 +252,7 @@ type ComplexityRoot struct {
 		AssignCustomerToGuestCart     func(childComplexity int, cartID string) int
 		CreateEmptyCart               func(childComplexity int, input *model.CreateEmptyCartInput) int
 		CreateGuestCart               func(childComplexity int, input *model.CreateGuestCartInput) int
+		CreateStripeCheckoutSession   func(childComplexity int, input model.CreateStripeCheckoutSessionInput) int
 		EstimateShippingMethods       func(childComplexity int, input model.EstimateShippingMethodsInput) int
 		EstimateTotals                func(childComplexity int, input model.EstimateTotalsInput) int
 		MergeCarts                    func(childComplexity int, sourceCartID string, destinationCartID *string) int
@@ -423,6 +429,7 @@ type MutationResolver interface {
 	SetPaymentMethodOnCart(ctx context.Context, input *model.SetPaymentMethodOnCartInput) (*model.SetPaymentMethodOnCartOutput, error)
 	SetGuestEmailOnCart(ctx context.Context, input *model.SetGuestEmailOnCartInput) (*model.SetGuestEmailOnCartOutput, error)
 	PlaceOrder(ctx context.Context, input *model.PlaceOrderInput) (*model.PlaceOrderOutput, error)
+	CreateStripeCheckoutSession(ctx context.Context, input model.CreateStripeCheckoutSessionInput) (*model.CreateStripeCheckoutSessionOutput, error)
 	ApplyCouponToCart(ctx context.Context, input *model.ApplyCouponToCartInput) (*model.ApplyCouponToCartOutput, error)
 	RemoveCouponFromCart(ctx context.Context, input *model.RemoveCouponFromCartInput) (*model.RemoveCouponFromCartOutput, error)
 	MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error)
@@ -1083,6 +1090,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CreateGuestCartOutput.Cart(childComplexity), true
 
+	case "CreateStripeCheckoutSessionOutput.checkout_url":
+		if e.ComplexityRoot.CreateStripeCheckoutSessionOutput.CheckoutURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CreateStripeCheckoutSessionOutput.CheckoutURL(childComplexity), true
+	case "CreateStripeCheckoutSessionOutput.session_id":
+		if e.ComplexityRoot.CreateStripeCheckoutSessionOutput.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CreateStripeCheckoutSessionOutput.SessionID(childComplexity), true
+
 	case "Discount.amount":
 		if e.ComplexityRoot.Discount.Amount == nil {
 			break
@@ -1245,6 +1265,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateGuestCart(childComplexity, args["input"].(*model.CreateGuestCartInput)), true
+	case "Mutation.createStripeCheckoutSession":
+		if e.ComplexityRoot.Mutation.CreateStripeCheckoutSession == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createStripeCheckoutSession_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateStripeCheckoutSession(childComplexity, args["input"].(model.CreateStripeCheckoutSessionInput)), true
 	case "Mutation.estimateShippingMethods":
 		if e.ComplexityRoot.Mutation.EstimateShippingMethods == nil {
 			break
@@ -1870,6 +1901,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCartItemUpdateInput,
 		ec.unmarshalInputConfigurableProductCartItemInput,
 		ec.unmarshalInputCreateGuestCartInput,
+		ec.unmarshalInputCreateStripeCheckoutSessionInput,
 		ec.unmarshalInputCustomizableOptionInput,
 		ec.unmarshalInputEnteredOptionInput,
 		ec.unmarshalInputEstimateAddressInput,
@@ -2097,6 +2129,17 @@ func (ec *executionContext) field_Mutation_createGuestCart_args(ctx context.Cont
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOCreateGuestCartInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateGuestCartInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createStripeCheckoutSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateStripeCheckoutSessionInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateStripeCheckoutSessionInput)
 	if err != nil {
 		return nil, err
 	}
@@ -5748,6 +5791,64 @@ func (ec *executionContext) fieldContext_CreateGuestCartOutput_cart(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _CreateStripeCheckoutSessionOutput_checkout_url(ctx context.Context, field graphql.CollectedField, obj *model.CreateStripeCheckoutSessionOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CreateStripeCheckoutSessionOutput_checkout_url,
+		func(ctx context.Context) (any, error) {
+			return obj.CheckoutURL, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CreateStripeCheckoutSessionOutput_checkout_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CreateStripeCheckoutSessionOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CreateStripeCheckoutSessionOutput_session_id(ctx context.Context, field graphql.CollectedField, obj *model.CreateStripeCheckoutSessionOutput) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CreateStripeCheckoutSessionOutput_session_id,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CreateStripeCheckoutSessionOutput_session_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CreateStripeCheckoutSessionOutput",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Discount_amount(ctx context.Context, field graphql.CollectedField, obj *model.Discount) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -6743,6 +6844,53 @@ func (ec *executionContext) fieldContext_Mutation_placeOrder(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_placeOrder_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createStripeCheckoutSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createStripeCheckoutSession,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateStripeCheckoutSession(ctx, fc.Args["input"].(model.CreateStripeCheckoutSessionInput))
+		},
+		nil,
+		ec.marshalOCreateStripeCheckoutSessionOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateStripeCheckoutSessionOutput,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createStripeCheckoutSession(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "checkout_url":
+				return ec.fieldContext_CreateStripeCheckoutSessionOutput_checkout_url(ctx, field)
+			case "session_id":
+				return ec.fieldContext_CreateStripeCheckoutSessionOutput_session_id(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CreateStripeCheckoutSessionOutput", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createStripeCheckoutSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -11838,6 +11986,50 @@ func (ec *executionContext) unmarshalInputCreateGuestCartInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCreateStripeCheckoutSessionInput(ctx context.Context, obj any) (model.CreateStripeCheckoutSessionInput, error) {
+	var it model.CreateStripeCheckoutSessionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"cart_id", "success_url", "cancel_url"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "cart_id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cart_id"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CartID = data
+		case "success_url":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("success_url"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SuccessURL = data
+		case "cancel_url":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cancel_url"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CancelURL = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCustomizableOptionInput(ctx context.Context, obj any) (model.CustomizableOptionInput, error) {
 	var it model.CustomizableOptionInput
 	if obj == nil {
@@ -13954,6 +14146,50 @@ func (ec *executionContext) _CreateGuestCartOutput(ctx context.Context, sel ast.
 	return out
 }
 
+var createStripeCheckoutSessionOutputImplementors = []string{"CreateStripeCheckoutSessionOutput"}
+
+func (ec *executionContext) _CreateStripeCheckoutSessionOutput(ctx context.Context, sel ast.SelectionSet, obj *model.CreateStripeCheckoutSessionOutput) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, createStripeCheckoutSessionOutputImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CreateStripeCheckoutSessionOutput")
+		case "checkout_url":
+			out.Values[i] = ec._CreateStripeCheckoutSessionOutput_checkout_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "session_id":
+			out.Values[i] = ec._CreateStripeCheckoutSessionOutput_session_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var discountImplementors = []string{"Discount"}
 
 func (ec *executionContext) _Discount(ctx context.Context, sel ast.SelectionSet, obj *model.Discount) graphql.Marshaler {
@@ -14160,6 +14396,10 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "placeOrder":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_placeOrder(ctx, field)
+			})
+		case "createStripeCheckoutSession":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createStripeCheckoutSession(ctx, field)
 			})
 		case "applyCouponToCart":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
@@ -16003,6 +16243,11 @@ func (ec *executionContext) unmarshalNConfigurableProductCartItemInput2ᚖgithub
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCreateStripeCheckoutSessionInput2githubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateStripeCheckoutSessionInput(ctx context.Context, v any) (model.CreateStripeCheckoutSessionInput, error) {
+	res, err := ec.unmarshalInputCreateStripeCheckoutSessionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNEnteredOptionInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐEnteredOptionInput(ctx context.Context, v any) (*model.EnteredOptionInput, error) {
 	res, err := ec.unmarshalInputEnteredOptionInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
@@ -16916,6 +17161,13 @@ func (ec *executionContext) marshalOCreateGuestCartOutput2ᚖgithubᚗcomᚋmage
 		return graphql.Null
 	}
 	return ec._CreateGuestCartOutput(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCreateStripeCheckoutSessionOutput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCreateStripeCheckoutSessionOutput(ctx context.Context, sel ast.SelectionSet, v *model.CreateStripeCheckoutSessionOutput) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CreateStripeCheckoutSessionOutput(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOCurrencyEnum2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCurrencyEnum(ctx context.Context, v any) (*model.CurrencyEnum, error) {

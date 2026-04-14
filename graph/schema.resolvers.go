@@ -228,6 +228,11 @@ func (r *mutationResolver) PlaceOrder(ctx context.Context, input *model.PlaceOrd
 	return r.CartService.PlaceOrder(ctx, input.CartID)
 }
 
+// CreateStripeCheckoutSession is the resolver for the createStripeCheckoutSession field.
+func (r *mutationResolver) CreateStripeCheckoutSession(ctx context.Context, input model.CreateStripeCheckoutSessionInput) (*model.CreateStripeCheckoutSessionOutput, error) {
+	return r.CartService.CreateStripeCheckoutSession(ctx, input.CartID, input.SuccessURL, input.CancelURL)
+}
+
 // ApplyCouponToCart is the resolver for the applyCouponToCart field.
 func (r *mutationResolver) ApplyCouponToCart(ctx context.Context, input *model.ApplyCouponToCartInput) (*model.ApplyCouponToCartOutput, error) {
 	cart, err := r.CartService.ApplyCoupon(ctx, input.CartID, input.CouponCode)

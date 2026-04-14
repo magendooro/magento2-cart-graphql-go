@@ -100,7 +100,7 @@ func CartToOrder(
 		QuoteID:           cart.EntityID,
 		CustomerID:        cart.CustomerID,
 		CustomerIsGuest:   cart.CustomerIsGuest,
-		CustomerGroupID:   0, // guest default; TODO: resolve from customer_group
+		CustomerGroupID:   cart.CustomerGroupID,
 		CustomerEmail:     email,
 		Firstname:         firstname,
 		Lastname:          lastname,

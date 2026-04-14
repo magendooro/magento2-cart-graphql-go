@@ -10,6 +10,7 @@ require (
 	github.com/magendooro/magento2-go-common v0.0.0-20260325142604-354309dde583
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/viper v1.21.0
+	github.com/stripe/stripe-go/v81 v81.4.0
 	github.com/vektah/gqlparser/v2 v2.5.32
 )
 

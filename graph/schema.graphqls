@@ -77,6 +77,9 @@ type Mutation {
     """Convert the cart into an order."""
     placeOrder(input: PlaceOrderInput): PlaceOrderOutput
 
+    """Create a Stripe Checkout Session and return the redirect URL."""
+    createStripeCheckoutSession(input: CreateStripeCheckoutSessionInput!): CreateStripeCheckoutSessionOutput
+
     """Apply a coupon to the cart."""
     applyCouponToCart(input: ApplyCouponToCartInput): ApplyCouponToCartOutput
 
@@ -555,6 +558,17 @@ type PlacedOrder {
     token: String!
 }
 
+input CreateStripeCheckoutSessionInput {
+    cart_id: String!
+    success_url: String!
+    cancel_url: String!
+}
+
+type CreateStripeCheckoutSessionOutput {
+    checkout_url: String!
+    session_id: String!
+}
+
 type ApplyCouponToCartOutput {
     cart: Cart!
 }
@@ -661,6 +675,7 @@ enum PlaceOrderErrorCodes {
     CART_NOT_ACTIVE
     GUEST_EMAIL_MISSING
     UNABLE_TO_PLACE_ORDER
+    INSUFFICIENT_STOCK
     UNDEFINED
 }
 

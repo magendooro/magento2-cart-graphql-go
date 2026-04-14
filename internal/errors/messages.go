@@ -71,4 +71,16 @@ var (
 )
 
 // Order errors
-var ErrPlaceOrderFailed = fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+var (
+	ErrPlaceOrderFailed  = fmt.Errorf("Unable to place order: A server error stopped your order from being placed. Please try to place your order again.")
+	ErrCartConflict      = fmt.Errorf("Cart was modified by another request, please retry.")
+	ErrInsufficientStock = func(sku string, requested, available float64) error {
+		return fmt.Errorf("Not enough items for \"%s\" in stock. Requested: %.0f, Available: %.0f.", sku, requested, available)
+	}
+	ErrOrderNotFound = func(incrementID string) error {
+		return fmt.Errorf("No such entity with incrementId = %s", incrementID)
+	}
+	ErrOrderStatusInvalid = func(from, to string) error {
+		return fmt.Errorf("Cannot change order status from \"%s\" to \"%s\".", from, to)
+	}
+)

@@ -312,6 +312,17 @@ type CreateGuestCartOutput struct {
 	Cart *Cart `json:"cart,omitempty"`
 }
 
+type CreateStripeCheckoutSessionInput struct {
+	CartID     string `json:"cart_id"`
+	SuccessURL string `json:"success_url"`
+	CancelURL  string `json:"cancel_url"`
+}
+
+type CreateStripeCheckoutSessionOutput struct {
+	CheckoutURL string `json:"checkout_url"`
+	SessionID   string `json:"session_id"`
+}
+
 type CustomizableOptionInput struct {
 	ID          *int   `json:"id,omitempty"`
 	ValueString string `json:"value_string"`
@@ -1025,6 +1036,7 @@ const (
 	PlaceOrderErrorCodesCartNotActive      PlaceOrderErrorCodes = "CART_NOT_ACTIVE"
 	PlaceOrderErrorCodesGuestEmailMissing  PlaceOrderErrorCodes = "GUEST_EMAIL_MISSING"
 	PlaceOrderErrorCodesUnableToPlaceOrder PlaceOrderErrorCodes = "UNABLE_TO_PLACE_ORDER"
+	PlaceOrderErrorCodesInsufficientStock  PlaceOrderErrorCodes = "INSUFFICIENT_STOCK"
 	PlaceOrderErrorCodesUndefined          PlaceOrderErrorCodes = "UNDEFINED"
 )
 
@@ -1033,12 +1045,13 @@ var AllPlaceOrderErrorCodes = []PlaceOrderErrorCodes{
 	PlaceOrderErrorCodesCartNotActive,
 	PlaceOrderErrorCodesGuestEmailMissing,
 	PlaceOrderErrorCodesUnableToPlaceOrder,
+	PlaceOrderErrorCodesInsufficientStock,
 	PlaceOrderErrorCodesUndefined,
 }
 
 func (e PlaceOrderErrorCodes) IsValid() bool {
 	switch e {
-	case PlaceOrderErrorCodesCartNotFound, PlaceOrderErrorCodesCartNotActive, PlaceOrderErrorCodesGuestEmailMissing, PlaceOrderErrorCodesUnableToPlaceOrder, PlaceOrderErrorCodesUndefined:
+	case PlaceOrderErrorCodesCartNotFound, PlaceOrderErrorCodesCartNotActive, PlaceOrderErrorCodesGuestEmailMissing, PlaceOrderErrorCodesUnableToPlaceOrder, PlaceOrderErrorCodesInsufficientStock, PlaceOrderErrorCodesUndefined:
 		return true
 	}
 	return false

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/magendooro/magento2-cart-graphql-go/internal/payment"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/service"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
@@ -16,9 +17,10 @@ type Resolver struct {
 	AgreementRepo     *repository.CheckoutAgreementRepository
 	ConfigProvider    *config.ConfigProvider
 	TokenResolver     *middleware.TokenResolver
+	StripeClient      *payment.StripeClient
 }
 
-func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
+func NewResolver(db *sql.DB, cp *config.ConfigProvider, stripeClient *payment.StripeClient) (*Resolver, error) {
 	if cp == nil {
 		return nil, fmt.Errorf("ConfigProvider is required")
 	}
@@ -46,5 +48,6 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 		CartService:    cartService,
 		AgreementRepo:  agreementRepo,
 		ConfigProvider: cp,
+		StripeClient:   stripeClient,
 	}, nil
 }

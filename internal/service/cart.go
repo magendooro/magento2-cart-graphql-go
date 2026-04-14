@@ -20,6 +20,7 @@ import (
 	"github.com/magendooro/magento2-cart-graphql-go/internal/ctxkeys"
 	"github.com/magendooro/magento2-go-common/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/order"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/payment"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/totals"
@@ -39,6 +40,7 @@ type CartService struct {
 	pipeline         *totals.Pipeline
 	cp               *config.ConfigProvider
 	mapper           *cartmapper.CartMapper
+	stripeClient     *payment.StripeClient
 }
 
 func NewCartService(
@@ -78,6 +80,11 @@ func NewCartService(
 		cp:               cp,
 		mapper:           cartmapper.NewCartMapper(cartRepo.DB(), addressRepo),
 	}
+}
+
+// SetStripeClient wires the Stripe client after construction (avoids circular deps).
+func (s *CartService) SetStripeClient(sc *payment.StripeClient) {
+	s.stripeClient = sc
 }
 
 // ── Cart lifecycle ────────────────────────────────────────────────────────────
@@ -239,6 +246,7 @@ func (s *CartService) UpdateItems(ctx context.Context, maskedID string, items []
 
 	if err := s.recalculateTotals(ctx, quoteID); err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+		return nil, err
 	}
 	return s.GetCart(ctx, maskedID)
 }
@@ -255,6 +263,7 @@ func (s *CartService) RemoveItem(ctx context.Context, maskedID string, itemUID s
 
 	if err := s.recalculateTotals(ctx, quoteID); err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
+		return nil, err
 	}
 	return s.GetCart(ctx, maskedID)
 }
@@ -472,6 +481,9 @@ func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, met
 	storeID := middleware.GetStoreID(ctx)
 	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
 	available := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
+	if s.stripeClient.Configured() {
+		available = append(available, &repository.PaymentMethod{Code: "stripe", Title: "Credit / Debit Card (Stripe)"})
+	}
 	found := false
 	for _, m := range available {
 		if m.Code == methodCode {
@@ -877,10 +889,26 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrPlaceOrderFailed.Error()), nil
 	}
 
+	// Auto-copy shipping → billing when no explicit billing address was set.
+	// This mirrors Magento's behaviour when the checkout uses same_as_shipping.
+	addrs = s.ensureBillingAddress(ctx, quoteID, addrs)
+
 	payment, _ := s.paymentRepo.GetSelectedMethod(ctx, quoteID)
 
-	if result := validateForOrder(cart, items, addrs, payment); result != nil {
+	if result := validateForOrder(cart, items, addrs, payment, middleware.GetCustomerID(ctx)); result != nil {
 		return result, nil
+	}
+
+	// Task 94: re-verify stock before committing the order
+	if stockErrors := s.checkStockForPlacement(ctx, items); len(stockErrors) > 0 {
+		return &model.PlaceOrderOutput{Errors: stockErrors}, nil
+	}
+
+	// Task 97: refresh item prices from catalog index; recollect items if any changed
+	if s.refreshItemPrices(ctx, cart, items) {
+		if refreshed, err := s.itemRepo.GetByQuoteID(ctx, quoteID); err == nil {
+			items = refreshed
+		}
 	}
 
 	orderTotals, err := s.collectTotals(ctx, cart, items, addrs)
@@ -945,6 +973,9 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 	}
 
 	availPayments := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
+	if s.stripeClient.Configured() {
+		availPayments = append(availPayments, &repository.PaymentMethod{Code: "stripe", Title: "Credit / Debit Card (Stripe)"})
+	}
 	selectedPayment, _ := s.paymentRepo.GetSelectedMethod(ctx, cart.EntityID)
 
 	// Build media base URL for product thumbnails.
@@ -972,11 +1003,15 @@ func (s *CartService) buildCart(ctx context.Context, cart *repository.CartData, 
 	}), nil
 }
 
+// recalculateTotals recomputes and persists cart totals with a SELECT FOR UPDATE
+// lock to prevent concurrent writes from producing inconsistent totals.
 func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error {
-	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	tx, cart, err := s.cartRepo.BeginTotalsUpdate(ctx, quoteID)
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
+
 	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
 	if err != nil {
 		return err
@@ -1002,7 +1037,10 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error 
 		isVirtual = false
 	}
 
-	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty, isVirtual)
+	if err := s.cartRepo.UpdateTotalsTx(ctx, tx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty, isVirtual); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *CartService) collectTotals(ctx context.Context, cart *repository.CartData, items []*repository.CartItemData, addrs []*repository.CartAddressData) (*totals.Total, error) {
@@ -1248,10 +1286,17 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, cu
 	for _, sel := range selections {
 		var productID int
 		var sku string
+		var selPriceValue float64
+		var selPriceType int // 0=fixed, 1=percent
 		err := db.QueryRowContext(ctx,
-			"SELECT product_id, (SELECT sku FROM catalog_product_entity WHERE entity_id = bs.product_id) FROM catalog_product_bundle_selection bs WHERE bs.selection_id = ? AND bs.parent_product_id = ?",
+			`SELECT bs.product_id,
+			        (SELECT sku FROM catalog_product_entity WHERE entity_id = bs.product_id),
+			        COALESCE(bs.selection_price_value, 0),
+			        COALESCE(bs.selection_price_type, 0)
+			 FROM catalog_product_bundle_selection bs
+			 WHERE bs.selection_id = ? AND bs.parent_product_id = ?`,
 			sel.selectionID, parent.ProductID,
-		).Scan(&productID, &sku)
+		).Scan(&productID, &sku, &selPriceValue, &selPriceType)
 		if err != nil {
 			return fmt.Errorf("Invalid bundle selection %d", sel.selectionID)
 		}
@@ -1261,13 +1306,22 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, cu
 			return fmt.Errorf("Could not find product \"%s\"", sku)
 		}
 
-		totalPrice += childProduct.Price * sel.qty
+		// Use selection_price_value for pricing (Magento bundle pricing pattern).
+		// type 0 = fixed price, type 1 = percent of parent price.
+		var selPrice float64
+		if selPriceType == 1 {
+			selPrice = parent.Price * selPriceValue / 100.0
+		} else {
+			selPrice = selPriceValue
+		}
+
+		totalPrice += selPrice * sel.qty
 		childSkus = append(childSkus, sku)
 		children = append(children, childInfo{
 			productID: productID,
 			sku:       sku,
 			name:      childProduct.Name,
-			price:     childProduct.Price,
+			price:     selPrice,
 			qty:       sel.qty,
 		})
 	}
@@ -1567,4 +1621,264 @@ func buildBuyRequestJSON(qty float64, superAttributes map[int]int) string {
 		Options:        []interface{}{},
 	})
 	return string(b)
+}
+
+// checkStockForPlacement re-verifies available inventory for all top-level cart
+// items before order placement. Returns PlaceOrderErrors for any item with
+// insufficient stock. Configurable children are skipped — stock is tracked on
+// the simple child SKU but reserved against the parent in inventory_reservation.
+func (s *CartService) checkStockForPlacement(ctx context.Context, items []*repository.CartItemData) []*model.PlaceOrderError {
+	var topItems []*repository.CartItemData
+	for _, item := range items {
+		if item.ParentItemID == nil {
+			topItems = append(topItems, item)
+		}
+	}
+	if len(topItems) == 0 {
+		return nil
+	}
+
+	args := make([]interface{}, len(topItems))
+	for i, item := range topItems {
+		args[i] = item.ProductID
+	}
+	ph := strings.Repeat("?,", len(args)-1) + "?"
+
+	rows, err := s.cartRepo.DB().QueryContext(ctx, fmt.Sprintf(`
+		SELECT csi.product_id, cpe.sku, csi.manage_stock, csi.is_in_stock,
+		       COALESCE(csi.qty, 0) + COALESCE(ir_sum.qty_reserved, 0) AS available_qty
+		FROM cataloginventory_stock_item csi
+		JOIN catalog_product_entity cpe ON cpe.entity_id = csi.product_id
+		LEFT JOIN (
+		    SELECT sku, SUM(quantity) AS qty_reserved
+		    FROM inventory_reservation
+		    WHERE stock_id = 1
+		    GROUP BY sku
+		) ir_sum ON ir_sum.sku = cpe.sku
+		WHERE csi.product_id IN (%s)`, ph), args...)
+	if err != nil {
+		log.Error().Err(err).Msg("pre-placement stock check failed")
+		return nil
+	}
+	defer rows.Close()
+
+	type stockRow struct {
+		productID    int
+		sku          string
+		manageStock  int
+		isInStock    int
+		availableQty float64
+	}
+	stock := make(map[int]stockRow, len(topItems))
+	for rows.Next() {
+		var r stockRow
+		rows.Scan(&r.productID, &r.sku, &r.manageStock, &r.isInStock, &r.availableQty)
+		stock[r.productID] = r
+	}
+
+	var errs []*model.PlaceOrderError
+	for _, item := range topItems {
+		sr, ok := stock[item.ProductID]
+		if !ok {
+			continue
+		}
+		if sr.isInStock == 0 {
+			errs = append(errs, &model.PlaceOrderError{
+				Code:    model.PlaceOrderErrorCodesInsufficientStock,
+				Message: carterr.ErrInsufficientStock(item.SKU, item.Qty, 0).Error(),
+			})
+			continue
+		}
+		if sr.manageStock == 1 && sr.availableQty < item.Qty {
+			errs = append(errs, &model.PlaceOrderError{
+				Code:    model.PlaceOrderErrorCodesInsufficientStock,
+				Message: carterr.ErrInsufficientStock(item.SKU, item.Qty, math.Max(0, sr.availableQty)).Error(),
+			})
+		}
+	}
+	return errs
+}
+
+// refreshItemPrices compares stored quote_item prices against the current
+// catalog price index and updates any items whose price has changed by more
+// than $0.01. Returns true if at least one item was updated so the caller
+// can re-read items and recollect totals.
+func (s *CartService) refreshItemPrices(ctx context.Context, cart *repository.CartData, items []*repository.CartItemData) bool {
+	var topItems []*repository.CartItemData
+	for _, item := range items {
+		if item.ParentItemID == nil {
+			topItems = append(topItems, item)
+		}
+	}
+	if len(topItems) == 0 {
+		return false
+	}
+
+	websiteID := s.cp.GetWebsiteID(cart.StoreID)
+	ph := strings.Repeat("?,", len(topItems)-1) + "?"
+	args := make([]interface{}, 0, 2+len(topItems))
+	args = append(args, cart.CustomerGroupID, websiteID)
+	for _, item := range topItems {
+		args = append(args, item.ProductID)
+	}
+
+	rows, err := s.cartRepo.DB().QueryContext(ctx, fmt.Sprintf(`
+		SELECT entity_id, COALESCE(final_price, 0)
+		FROM catalog_product_index_price
+		WHERE customer_group_id = ? AND website_id = ? AND entity_id IN (%s)`, ph), args...)
+	if err != nil {
+		log.Error().Err(err).Msg("price refresh query failed")
+		return false
+	}
+	defer rows.Close()
+
+	currentPrices := make(map[int]float64, len(topItems))
+	for rows.Next() {
+		var productID int
+		var price float64
+		rows.Scan(&productID, &price)
+		currentPrices[productID] = price
+	}
+
+	updated := false
+	for _, item := range topItems {
+		newPrice, ok := currentPrices[item.ProductID]
+		if !ok || newPrice <= 0 {
+			continue
+		}
+		if math.Abs(newPrice-item.Price) > 0.01 {
+			if err := s.itemRepo.UpdatePrice(ctx, item.ItemID, newPrice, item.Qty); err != nil {
+				log.Error().Err(err).Int("item_id", item.ItemID).Msg("failed to update item price before placement")
+				continue
+			}
+			log.Info().Str("sku", item.SKU).
+				Float64("old_price", item.Price).Float64("new_price", newPrice).
+				Msg("cart item price updated before placement")
+			updated = true
+		}
+	}
+	return updated
+}
+
+// ── Stripe Checkout ───────────────────────────────────────────────────────────
+
+// CreateStripeCheckoutSession creates a Stripe Checkout Session for a cart.
+// The cart must have items, a shipping address, and a shipping method set.
+// On success returns the Stripe-hosted checkout URL and session ID.
+func (s *CartService) CreateStripeCheckoutSession(ctx context.Context, maskedCartID, successURL, cancelURL string) (*model.CreateStripeCheckoutSessionOutput, error) {
+	if !s.stripeClient.Configured() {
+		return nil, fmt.Errorf("Stripe is not configured on this store.")
+	}
+
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedCartID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedCartID)
+	}
+
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedCartID)
+	}
+	if cart.IsActive == 0 {
+		return nil, carterr.ErrCartNotActive
+	}
+
+	items, err := s.itemRepo.GetByQuoteID(ctx, quoteID)
+	if err != nil || len(items) == 0 {
+		return nil, fmt.Errorf("Cart is empty.")
+	}
+
+	// Set stripe as the payment method on the cart
+	_ = s.paymentRepo.SetPaymentMethod(ctx, quoteID, "stripe")
+
+	// Build Stripe line items from top-level cart items only (no child rows)
+	currency := strings.ToLower(cart.QuoteCurrencyCode)
+	if currency == "" {
+		currency = "usd"
+	}
+
+	var lineItems []payment.LineItem
+	for _, item := range items {
+		if item.ParentItemID != nil {
+			continue // skip child items — the configurable parent carries the price
+		}
+		unitCents := int64(math.Round(item.Price * 100))
+		if unitCents <= 0 {
+			continue
+		}
+		lineItems = append(lineItems, payment.LineItem{
+			Name:     item.Name,
+			Amount:   unitCents,
+			Currency: currency,
+			Qty:      int64(math.Round(item.Qty)),
+		})
+	}
+
+	// Add shipping as a line item if non-zero
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+	for _, addr := range addrs {
+		if addr.AddressType == "shipping" && addr.ShippingAmount > 0 {
+			shippingCents := int64(math.Round(addr.ShippingAmount * 100))
+			lineItems = append(lineItems, payment.LineItem{
+				Name:     "Shipping",
+				Amount:   shippingCents,
+				Currency: currency,
+				Qty:      1,
+			})
+			break
+		}
+	}
+
+	if len(lineItems) == 0 {
+		return nil, fmt.Errorf("Cart has no chargeable items.")
+	}
+
+	result, err := s.stripeClient.CreateCheckoutSession(ctx, maskedCartID, lineItems, successURL, cancelURL)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create Stripe Checkout Session: %w", err)
+	}
+
+	return &model.CreateStripeCheckoutSessionOutput{
+		CheckoutURL: result.URL,
+		SessionID:   result.SessionID,
+	}, nil
+}
+
+// ensureBillingAddress copies the shipping address to billing when no billing
+// address has been explicitly set. This mirrors Magento's same_as_shipping
+// behaviour for storefronts that don't have a separate billing address step.
+func (s *CartService) ensureBillingAddress(ctx context.Context, quoteID int, addrs []*repository.CartAddressData) []*repository.CartAddressData {
+	var hasBilling, hasShipping bool
+	var shippingAddr *repository.CartAddressData
+	for _, a := range addrs {
+		switch a.AddressType {
+		case "billing":
+			hasBilling = true
+		case "shipping":
+			hasShipping = true
+			shippingAddr = a
+		}
+	}
+	if hasBilling || !hasShipping || shippingAddr == nil {
+		return addrs
+	}
+
+	// Build street slice from newline-separated string
+	streetLines := strings.Split(shippingAddr.Street, "\n")
+	_, err := s.addressRepo.SetAddress(
+		ctx, quoteID, "billing",
+		shippingAddr.Firstname, shippingAddr.Lastname, shippingAddr.City, shippingAddr.CountryID,
+		streetLines,
+		shippingAddr.Company, shippingAddr.Region, shippingAddr.Postcode, shippingAddr.Telephone,
+		shippingAddr.RegionID,
+	)
+	if err != nil {
+		log.Warn().Err(err).Int("quote_id", quoteID).Msg("failed to auto-copy shipping to billing")
+		return addrs
+	}
+
+	// Append a synthetic billing address so the validator sees it without a DB round-trip
+	billing := *shippingAddr
+	billing.AddressType = "billing"
+	return append(addrs, &billing)
 }

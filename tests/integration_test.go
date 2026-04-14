@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 		panic("failed to create config provider: " + err.Error())
 	}
 
-	resolver, err := graph.NewResolver(db, cp)
+	resolver, err := graph.NewResolver(db, cp, nil)
 	if err != nil {
 		panic("failed to create resolver: " + err.Error())
 	}

@@ -8,11 +8,13 @@ import (
 
 // validateForOrder checks all pre-conditions for PlaceOrder and returns a
 // PlaceOrderOutput with errors if any condition fails, or nil if the cart is ready.
+// requestCustomerID is the customer ID from the JWT in the request context (0 = guest).
 func validateForOrder(
 	cart *repository.CartData,
 	items []*repository.CartItemData,
 	addrs []*repository.CartAddressData,
 	payment *repository.PaymentMethod,
+	requestCustomerID int,
 ) *model.PlaceOrderOutput {
 	if len(items) == 0 {
 		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrPlaceOrderFailed.Error())
@@ -43,7 +45,9 @@ func validateForOrder(
 	}
 
 	if cart.CustomerID == nil || *cart.CustomerID == 0 {
-		if cart.CustomerEmail == nil || *cart.CustomerEmail == "" {
+		// Skip email check when an authenticated customer is placing the order
+		// (their identity is established via JWT even if the cart has no CustomerID).
+		if requestCustomerID == 0 && (cart.CustomerEmail == nil || *cart.CustomerEmail == "") {
 			return orderErr(model.PlaceOrderErrorCodesGuestEmailMissing, carterr.ErrGuestEmailMissing.Error())
 		}
 	}

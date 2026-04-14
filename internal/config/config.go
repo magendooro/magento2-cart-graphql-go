@@ -14,6 +14,7 @@ type Config struct {
 	Magento  MagentoConfig  `mapstructure:"magento"`
 	GraphQL  GraphQLConfig  `mapstructure:"graphql"`
 	Logging  LoggingConfig  `mapstructure:"logging"`
+	Stripe   StripeConfig   `mapstructure:"stripe"`
 }
 
 type ServerConfig struct {
@@ -45,6 +46,12 @@ type RedisConfig struct {
 type MagentoConfig struct {
 	CryptKey      string `mapstructure:"crypt_key"`
 	JWTTTLMinutes int    `mapstructure:"jwt_ttl_minutes"`
+}
+
+type StripeConfig struct {
+	SecretKey      string `mapstructure:"secret_key"`
+	WebhookSecret  string `mapstructure:"webhook_secret"`
+	PublishableKey string `mapstructure:"publishable_key"`
 }
 
 type GraphQLConfig struct {
@@ -94,6 +101,9 @@ func Load() (*Config, error) {
 	viper.BindEnv("magento.crypt_key", "MAGENTO_CRYPT_KEY")
 	viper.BindEnv("logging.level", "LOG_LEVEL")
 	viper.BindEnv("logging.pretty", "LOG_PRETTY")
+	viper.BindEnv("stripe.secret_key", "STRIPE_SECRET_KEY")
+	viper.BindEnv("stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
+	viper.BindEnv("stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 
 	_ = viper.ReadInConfig()
 
