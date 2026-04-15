@@ -47,17 +47,7 @@ steps:
     image: /bin/sh
     commands:
       - scp cart-server-new deploy:/tmp/cart-server
-      - ssh deploy "
-          set -e
-          BINS=/srv/magendoo/bins
-          [ -f \$BINS/cart ] && cp \$BINS/cart \$BINS/cart.bak
-          cp /tmp/cart-server \$BINS/cart.new
-          chmod +x \$BINS/cart.new
-          mv \$BINS/cart.new \$BINS/cart
-          systemctl restart magendoo-cart
-          sleep 3
-          systemctl is-active magendoo-cart && echo 'deploy ok' || (echo 'FAILED — rolling back'; cp \$BINS/cart.bak \$BINS/cart; systemctl restart magendoo-cart; exit 1)
-        "
+      - ssh deploy "set -e; BINS=/srv/magendoo/bins; [ -f \$BINS/cart ] && cp \$BINS/cart \$BINS/cart.bak; cp /tmp/cart-server \$BINS/cart.new; chmod +x \$BINS/cart.new; mv \$BINS/cart.new \$BINS/cart; systemctl restart magendoo-cart; sleep 3; systemctl is-active magendoo-cart && echo 'deploy ok' || (echo 'FAILED — rolling back'; cp \$BINS/cart.bak \$BINS/cart; systemctl restart magendoo-cart; exit 1)"
     when:
       - event: push
         branch: [main, master]

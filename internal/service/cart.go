@@ -1342,11 +1342,15 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, cu
 
 		// Use selection_price_value for pricing (Magento bundle pricing pattern).
 		// type 0 = fixed price, type 1 = percent of parent price.
+		// When selection_price_value = 0 and type = fixed, the bundle uses dynamic
+		// pricing: inherit the child product's catalog price.
 		var selPrice float64
 		if selPriceType == 1 {
 			selPrice = parent.Price * selPriceValue / 100.0
-		} else {
+		} else if selPriceValue > 0 {
 			selPrice = selPriceValue
+		} else {
+			selPrice = childProduct.Price // dynamic pricing: use child's catalog price
 		}
 
 		totalPrice += selPrice * sel.qty
